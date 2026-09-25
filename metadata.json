@@ -1,0 +1,6 @@
+{
+  "name": "Rithu — College Magazine",
+  "description": "Read it. Hear it. Relive it. The annual edition, video archive, and spoken word soundscapes of College of Engineering Munnar.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,209 @@
+@import "tailwindcss";
+
+@theme {
+  /* Color Hunt Palette: 800020, f3e6d5, fff9f2, d45060 */
+  --color-palette-burgundy: #800020;
+  --color-palette-cream: #F3E6D5;
+  --color-palette-linen: #FFF9F2;
+  --color-palette-coral: #D45060;
+
+  --color-primary: #800020;
+  --color-on-primary: #FFF9F2;
+  --color-primary-container: #4D0013;
+  --color-on-primary-container: #F3E6D5;
+
+  --color-secondary: #D45060;
+  --color-on-secondary: #FFFFFF;
+  --color-secondary-container: #2E000B;
+
+  --color-surface: #120306;
+  --color-surface-dim: #0B0103;
+  --color-surface-bright: #1D050B;
+  --color-surface-container: #180408;
+  --color-surface-container-high: #24070D;
+  --color-surface-container-highest: #330B14;
+
+  --color-on-surface: #FFF9F2;
+  --color-on-surface-variant: #F3E6D5;
+  --color-outline: #521320;
+  --color-outline-variant: #3A0C16;
+
+  --color-background: #0E0205;
+  --color-on-background: #FFF9F2;
+
+  --color-ink: #FFF9F2;
+  --color-ink-muted: #F3E6D5;
+  --color-accent: #D45060;
+}
+
+@layer base {
+  body {
+    background-color: #0E0205;
+    color: #FFF9F2;
+    font-family: 'Inter', 'Noto Sans Malayalam', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar,
+::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.font-malayalam-serif {
+  font-family: 'Noto Serif Malayalam', 'Inter', serif;
+}
+
+/* 3D Realistic Book Flip Engine */
+.book-perspective {
+  perspective: 2200px;
+  perspective-origin: 50% 50%;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+.origin-left-spine {
+  transform-origin: left center;
+}
+
+.origin-right-spine {
+  transform-origin: right center;
+}
+
+/* Page stacked depth simulation (mimicking thickness of 100+ pages) */
+.book-edge-stack-right {
+  box-shadow: 
+    1px 0 0 #F3E6D5,
+    2px 0 0 #EAD7C0,
+    3px 0 0 #FFF9F2,
+    4px 0 0 #DDC9B1,
+    5px 0 0 #F3E6D5,
+    6px 0 0 #CDB59B,
+    7px 1px 3px rgba(0, 0, 0, 0.4),
+    12px 14px 28px rgba(0, 0, 0, 0.65);
+}
+
+.book-edge-stack-left {
+  box-shadow: 
+    -1px 0 0 #F3E6D5,
+    -2px 0 0 #EAD7C0,
+    -3px 0 0 #FFF9F2,
+    -4px 0 0 #DDC9B1,
+    -5px 0 0 #F3E6D5,
+    -6px 0 0 #CDB59B,
+    -7px 1px 3px rgba(0, 0, 0, 0.4),
+    -12px 14px 28px rgba(0, 0, 0, 0.65);
+}
+
+/* Authentic Paper Grain */
+.paper-grain {
+  background-color: #FFF9F2;
+  background-image: radial-gradient(#140A0C 0.35px, transparent 0.35px);
+  background-size: 10px 10px;
+}
+
+/* Physical Bound Spine & Center Gutter Crease */
+.spine-groove {
+  box-shadow: 
+    inset -8px 0 16px -2px rgba(0, 0, 0, 0.55),
+    inset 8px 0 16px -2px rgba(0, 0, 0, 0.55),
+    inset -1px 0 3px rgba(0, 0, 0, 0.8),
+    inset 1px 0 3px rgba(0, 0, 0, 0.8);
+}
+
+.hardcover-edge {
+  box-shadow: 0 20px 45px -8px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(243, 230, 213, 0.15), inset 0 0 20px rgba(0, 0, 0, 0.6);
+}
+
+/* Interactive bottom corner peel / flutter */
+@keyframes cornerPeelHint {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(-3px, -3px) rotate(-2deg);
+  }
+}
+
+.animate-corner-pulse {
+  animation: cornerPeelHint 3s ease-in-out infinite;
+}
+
+/* Paper curl dynamic traveling shading */
+.paper-peel-highlight-next {
+  background: linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(243,230,213,0.15) 30%, rgba(0,0,0,0.1) 60%, rgba(0,0,0,0.7) 100%);
+}
+
+.paper-peel-highlight-prev {
+  background: linear-gradient(225deg, rgba(255,255,255,0.55) 0%, rgba(243,230,213,0.15) 30%, rgba(0,0,0,0.1) 60%, rgba(0,0,0,0.7) 100%);
+}
+
+/* Dynamic 3D turning leaf shadows */
+.paper-shadow-cast-next {
+  box-shadow: 28px 20px 50px rgba(0, 0, 0, 0.8), 10px 8px 20px rgba(128, 0, 32, 0.35);
+}
+
+.paper-shadow-cast-prev {
+  box-shadow: -28px 20px 50px rgba(0, 0, 0, 0.8), -10px 8px 20px rgba(128, 0, 32, 0.35);
+}
+
+/* Realistic Dog-Ear Fold Shadows */
+.dogear-shadow-next {
+  filter: drop-shadow(-5px -5px 7px rgba(0, 0, 0, 0.5));
+}
+
+.dogear-shadow-prev {
+  filter: drop-shadow(5px -5px 7px rgba(0, 0, 0, 0.5));
+}
+
+/* Underpage Cast Shadows during curl */
+.underpage-shadow-next {
+  background: radial-gradient(ellipse at 88% 88%, rgba(0,0,0,0.55) 0%, transparent 68%);
+}
+
+.underpage-shadow-prev {
+  background: radial-gradient(ellipse at 12% 88%, rgba(0,0,0,0.55) 0%, transparent 68%);
+}
+
+/* Realistic 3D Paper Curvature & Roll */
+.paper-turn-curve-next {
+  box-shadow: 
+    -12px 0 25px -4px rgba(0, 0, 0, 0.4),
+    20px 25px 50px rgba(0, 0, 0, 0.75),
+    4px 0 10px rgba(128, 0, 32, 0.35);
+}
+
+.paper-turn-curve-prev {
+  box-shadow: 
+    12px 0 25px -4px rgba(0, 0, 0, 0.4),
+    -20px 25px 50px rgba(0, 0, 0, 0.75),
+    -4px 0 10px rgba(128, 0, 32, 0.35);
+}
+
+/* Interactive Dog-Ear Corner Hover and Lift */
+@keyframes dogearFlutter {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-3px, -3px) scale(1.08);
+  }
+}
+
+.animate-dogear-flutter {
+  animation: dogearFlutter 2.5s ease-in-out infinite;
+}
