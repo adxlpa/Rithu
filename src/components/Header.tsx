@@ -71,6 +71,17 @@ export const Header: React.FC<HeaderProps> = ({
           >
             Audio
           </button>
+          <button
+            onClick={() => {
+              onNavigate('home');
+              setTimeout(() => {
+                document.getElementById('editorial-board')?.scrollIntoView({ behavior: 'smooth' });
+              }, 80);
+            }}
+            className="text-[14.5px] pb-1 text-[#5C3A42] hover:text-[#800020] font-medium transition-all duration-150 cursor-pointer whitespace-nowrap"
+          >
+            Editorial Board
+          </button>
         </nav>
 
         {/* Zone 3: Primary Actions */}
@@ -185,6 +196,18 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               Audio Soundscapes
+            </button>
+            <button
+              onClick={() => {
+                onNavigate('home');
+                setMobileMenuOpen(false);
+                setTimeout(() => {
+                  document.getElementById('editorial-board')?.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+              }}
+              className="text-left py-2 px-3 rounded-lg text-[15px] font-medium text-[#1F040A] hover:bg-[#F3E6D5] transition-colors"
+            >
+              Editorial Board
             </button>
             <button
               onClick={() => {

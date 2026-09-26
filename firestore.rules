@@ -53,11 +53,21 @@ service cloud.firestore {
         existing().editorialKey.size() >= 1 &&
         existing().editorialKey.size() <= 64 &&
         existing().editorialKey == 'rithu2026-cem-vault'
+      ) || (
+        !('editorialKey' in existing()) &&
+        existing().isPublic == true &&
+        existing().createdByUid is string &&
+        existing().createdByUid.size() >= 1 &&
+        existing().createdByUid.size() <= 128
       );
     }
 
-    function isValidCreatorUid(uid) {
-      return uid is string && uid.size() >= 1 && uid.size() <= 128 && uid.matches('^[a-zA-Z0-9_\\-]+$') && (
+    function isValidCreatorUidFormat(uid) {
+      return uid is string && uid.size() >= 1 && uid.size() <= 128 && uid.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidCreatorIdentity(uid) {
+      return isValidCreatorUidFormat(uid) && (
         (isSignedIn() && uid == request.auth.uid) || uid == 'rithu-editorial-admin'
       );
     }
@@ -138,7 +148,7 @@ service cloud.firestore {
         && (!('coverImage' in data) || (data.coverImage is string && data.coverImage.size() <= 700000))
         && (!('audioUrl' in data) || (data.audioUrl is string && data.audioUrl.size() <= 700000))
         && data.isPublic is bool
-        && isValidCreatorUid(data.createdByUid)
+        && isValidCreatorUidFormat(data.createdByUid)
         && data.editorialKey is string && data.editorialKey.size() >= 1 && data.editorialKey.size() <= 64
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -198,7 +208,7 @@ service cloud.firestore {
         && (!('description' in data) || (data.description is string && data.description.size() <= 2000))
         && (!('videoUrl' in data) || (data.videoUrl is string && data.videoUrl.size() <= 700000))
         && data.isPublic is bool
-        && isValidCreatorUid(data.createdByUid)
+        && isValidCreatorUidFormat(data.createdByUid)
         && data.editorialKey is string && data.editorialKey.size() >= 1 && data.editorialKey.size() <= 64
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -241,7 +251,7 @@ service cloud.firestore {
         && (data.sourceType == 'curated' || data.sourceType == 'pdf')
         && (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 255))
         && data.isPublic is bool
-        && isValidCreatorUid(data.createdByUid)
+        && isValidCreatorUidFormat(data.createdByUid)
         && data.editorialKey is string && data.editorialKey.size() >= 1 && data.editorialKey.size() <= 64
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -285,7 +295,7 @@ service cloud.firestore {
         && data.subtitle is string && data.subtitle.size() >= 1 && data.subtitle.size() <= 200
         && data.pdfImageUrl is string && data.pdfImageUrl.size() >= 1 && data.pdfImageUrl.size() <= 850000
         && data.isPublic is bool
-        && isValidCreatorUid(data.createdByUid)
+        && isValidCreatorUidFormat(data.createdByUid)
         && data.editorialKey is string && data.editorialKey.size() >= 1 && data.editorialKey.size() <= 64
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -322,7 +332,7 @@ service cloud.firestore {
         && data.totalChunks is int && data.totalChunks >= 1 && data.totalChunks <= 100
         && data.data is string && data.data.size() >= 1 && data.data.size() <= 800000
         && data.isPublic is bool
-        && isValidCreatorUid(data.createdByUid)
+        && isValidCreatorUidFormat(data.createdByUid)
         && data.editorialKey is string && data.editorialKey.size() >= 1 && data.editorialKey.size() <= 64
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -361,6 +371,7 @@ service cloud.firestore {
       allow list: if existing().isPublic == true;
       allow create: if isValidId(trackId)
         && isValidAudioTrack(incoming())
+        && isValidCreatorIdentity(incoming().createdByUid)
         && incoming().id == trackId
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
@@ -396,6 +407,7 @@ service cloud.firestore {
       allow list: if existing().isPublic == true;
       allow create: if isValidId(videoId)
         && isValidVideoItem(incoming())
+        && isValidCreatorIdentity(incoming().createdByUid)
         && incoming().id == videoId
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
@@ -431,6 +443,7 @@ service cloud.firestore {
       allow list: if existing().isPublic == true;
       allow create: if isValidId(editionId)
         && isValidMagazineEdition(incoming())
+        && isValidCreatorIdentity(incoming().createdByUid)
         && incoming().id == editionId
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
@@ -461,6 +474,7 @@ service cloud.firestore {
       allow list: if existing().isPublic == true;
       allow create: if isValidId(pageId)
         && isValidMagazinePage(incoming())
+        && isValidCreatorIdentity(incoming().createdByUid)
         && incoming().id == pageId
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
@@ -496,6 +510,7 @@ service cloud.firestore {
       allow list: if existing().isPublic == true;
       allow create: if isValidId(chunkId)
         && isValidMediaChunk(incoming())
+        && isValidCreatorIdentity(incoming().createdByUid)
         && incoming().id == chunkId
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time

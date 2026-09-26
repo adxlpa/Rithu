@@ -206,6 +206,87 @@ export async function resetPersistedMagazine(): Promise<void> {
   await setItem(STORE_MAGAZINE, 'edition', INITIAL_MAGAZINE_EDITION);
 }
 
+const EDITORIAL_BOARD_MEDIA_ID = 'editorial-board-2026';
+
+export async function loadPersistedEditorialBoardImage(): Promise<string | null> {
+  const data = await getItem<string>(STORE_MAGAZINE, 'editorial_board_image');
+  if (typeof data === 'string' && data.length > 0) {
+    return data;
+  }
+  return null;
+}
+
+export async function savePersistedEditorialBoardImage(dataUrl: string | null): Promise<void> {
+  await setItem(STORE_MAGAZINE, 'editorial_board_image', dataUrl);
+}
+
+/**
+ * Uploads the Editorial Board poster image to Firebase Firestore (`media_chunks` with mediaId 'editorial-board-2026')
+ * so every visitor across all devices sees the uploaded Editorial Board poster without login.
+ */
+export async function uploadEditorialBoardImageToFirebase(
+  fileOrDataUrl: File | string,
+  onProgress?: (percent: number) => void
+): Promise<string> {
+  const dataUrl =
+    typeof fileOrDataUrl === 'string' ? fileOrDataUrl : await fileToDataUrl(fileOrDataUrl);
+  const chunkSize = 680000;
+  const totalChunks = Math.ceil(dataUrl.length / chunkSize);
+
+  if (totalChunks > 95) {
+    throw new Error('Image exceeds maximum cloud size. Please use a compressed PNG/JPEG.');
+  }
+
+  const creatorUid = getActiveCreatorUid();
+
+  // Delete any prior chunks for editorial-board-2026 first
+  try {
+    const existingQ = query(
+      collection(db, 'media_chunks'),
+      where('isPublic', '==', true),
+      where('mediaId', '==', EDITORIAL_BOARD_MEDIA_ID)
+    );
+    const existingSnap = await getDocs(existingQ);
+    if (!existingSnap.empty) {
+      const delBatch = writeBatch(db);
+      existingSnap.docs.forEach((d) => delBatch.delete(d.ref));
+      await delBatch.commit();
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+
+  for (let i = 0; i < totalChunks; i++) {
+    const slice = dataUrl.slice(i * chunkSize, (i + 1) * chunkSize);
+    const chunkDocId = sanitizeDocId(`${EDITORIAL_BOARD_MEDIA_ID}-c-${i}`);
+    const payload = {
+      id: chunkDocId,
+      mediaId: EDITORIAL_BOARD_MEDIA_ID,
+      chunkIndex: i,
+      totalChunks,
+      data: slice,
+      isPublic: true,
+      createdByUid: creatorUid,
+      editorialKey: EDITORIAL_KEY,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    try {
+      await setDoc(doc(db, 'media_chunks', chunkDocId), payload);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `media_chunks/${chunkDocId}`);
+    }
+
+    if (onProgress) {
+      onProgress(Math.round(((i + 1) / totalChunks) * 100));
+    }
+  }
+
+  await savePersistedEditorialBoardImage(dataUrl);
+  return dataUrl;
+}
+
 // ============================================================================
 // Chunked Binary File Storage in Firebase Firestore (/media_chunks)
 // ============================================================================
@@ -437,6 +518,7 @@ export function subscribeToCloudArchive(callbacks: {
   onAudioTracks: (tracks: AudioTrack[]) => void;
   onVideoItems: (videos: VideoItem[]) => void;
   onMagazine: (pages: MagazinePage[], edition: MagazineEditionInfo) => void;
+  onEditorialBoardImage?: (imageUrl: string | null) => void;
 }): () => void {
   let latestEdition: MagazineEditionInfo | null = null;
   let latestPdfPages: MagazinePage[] = [];
@@ -585,11 +667,38 @@ export function subscribeToCloudArchive(callbacks: {
     }
   );
 
+  // 5. Editorial Board Poster Image Listener
+  const editorialBoardQuery = query(
+    collection(db, 'media_chunks'),
+    where('isPublic', '==', true),
+    where('mediaId', '==', EDITORIAL_BOARD_MEDIA_ID)
+  );
+  const unsubEditorialBoard = onSnapshot(
+    editorialBoardQuery,
+    (snapshot) => {
+      if (!snapshot.empty && callbacks.onEditorialBoardImage) {
+        const chunks = snapshot.docs
+          .map((d) => d.data() as { chunkIndex: number; totalChunks: number; data: string })
+          .sort((a, b) => a.chunkIndex - b.chunkIndex);
+        const expectedTotal = chunks[0]?.totalChunks || chunks.length;
+        if (chunks.length >= expectedTotal) {
+          const fullDataUrl = chunks.map((c) => c.data).join('');
+          callbacks.onEditorialBoardImage(fullDataUrl);
+          savePersistedEditorialBoardImage(fullDataUrl);
+        }
+      }
+    },
+    () => {
+      // Ignore transient listener error
+    }
+  );
+
   return () => {
     unsubAudio();
     unsubVideo();
     unsubEdition();
     unsubPages();
+    unsubEditorialBoard();
   };
 }
 
@@ -673,9 +782,10 @@ export async function updateCloudAudioTrack(track: AudioTrack): Promise<void> {
   const { docId, payload } = buildAudioTrackPayload(track, creatorUid, true);
   try {
     await updateDoc(doc(db, 'audio_tracks', docId), payload);
-  } catch (error) {
+  } catch {
     try {
-      const fresh = buildAudioTrackPayload(track, creatorUid, false);
+      await deleteDoc(doc(db, 'audio_tracks', docId)).catch(() => {});
+      const fresh = buildAudioTrackPayload({ ...track, createdByUid: creatorUid }, creatorUid, false);
       await setDoc(doc(db, 'audio_tracks', docId), fresh.payload);
     } catch (innerErr) {
       handleFirestoreError(innerErr, OperationType.UPDATE, `audio_tracks/${docId}`);
@@ -708,9 +818,10 @@ export async function updateCloudVideoItem(video: VideoItem): Promise<void> {
   const { docId, payload } = buildVideoItemPayload(video, creatorUid, true);
   try {
     await updateDoc(doc(db, 'video_items', docId), payload);
-  } catch (error) {
+  } catch {
     try {
-      const fresh = buildVideoItemPayload(video, creatorUid, false);
+      await deleteDoc(doc(db, 'video_items', docId)).catch(() => {});
+      const fresh = buildVideoItemPayload({ ...video, createdByUid: creatorUid }, creatorUid, false);
       await setDoc(doc(db, 'video_items', docId), fresh.payload);
     } catch (innerErr) {
       handleFirestoreError(innerErr, OperationType.UPDATE, `video_items/${docId}`);

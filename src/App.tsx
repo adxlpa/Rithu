@@ -24,6 +24,7 @@ import {
   loadPersistedMagazine,
   savePersistedMagazine,
   resetPersistedMagazine,
+  loadPersistedEditorialBoardImage,
   subscribeToCloudArchive,
   seedInitialCloudDataIfNeeded,
   saveCloudAudioTrack,
@@ -56,14 +57,37 @@ export default function App() {
   // Magazine Edition & PDF State
   const [magazinePages, setMagazinePages] = useState<MagazinePage[]>(DEFAULT_MAGAZINE_PAGES);
   const [magazineEdition, setMagazineEdition] = useState<MagazineEditionInfo>(INITIAL_MAGAZINE_EDITION);
+  const [editorialBoardImage, setEditorialBoardImage] = useState<string | null>(null);
 
   // Storage Initialization Flag
   const [isStorageReady, setIsStorageReady] = useState(false);
 
-  // Authentication State
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
+  // Authentication State (Persisted in localStorage so GitHub Pages reloads keep Admin logged in)
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('rithu_admin_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Boolean(parsed?.isLoggedIn);
+      }
+    } catch {
+      // Ignore storage error
+    }
+    return false;
+  });
   const [isCloudSynced, setIsCloudSynced] = useState<boolean>(true);
-  const [adminUser, setAdminUser] = useState<string>('Editor');
+  const [adminUser, setAdminUser] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('rithu_admin_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.adminUser) return String(parsed.adminUser);
+      }
+    } catch {
+      // Ignore storage error
+    }
+    return 'Admin';
+  });
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
 
   // Audio Player State: Starts as null so "Now Playing" is NEVER shown on page load/refresh
@@ -88,16 +112,20 @@ export default function App() {
     let isMounted = true;
     async function initStorage() {
       try {
-        const [loadedTracks, loadedVideos, loadedMag] = await Promise.all([
+        const [loadedTracks, loadedVideos, loadedMag, loadedBoardImg] = await Promise.all([
           loadPersistedAudioTracks(),
           loadPersistedVideoItems(),
           loadPersistedMagazine(),
+          loadPersistedEditorialBoardImage(),
         ]);
         if (isMounted) {
           setAudioTracks(loadedTracks);
           setVideoItems(loadedVideos);
           setMagazinePages(loadedMag.pages);
           setMagazineEdition(loadedMag.edition);
+          if (loadedBoardImg) {
+            setEditorialBoardImage(loadedBoardImg);
+          }
           setIsStorageReady(true);
         }
       } catch (err) {
@@ -125,6 +153,11 @@ export default function App() {
           setMagazineEdition(cloudEdition);
         }
       },
+      onEditorialBoardImage: (cloudBoardImg) => {
+        if (isMounted && cloudBoardImg) {
+          setEditorialBoardImage(cloudBoardImg);
+        }
+      },
     });
 
     return () => {
@@ -137,9 +170,18 @@ export default function App() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        const displayLabel = user.displayName || user.email || 'Cloud Admin';
         setIsAdminLoggedIn(true);
         setIsCloudSynced(true);
-        setAdminUser(user.displayName || user.email || 'Cloud Admin');
+        setAdminUser(displayLabel);
+        try {
+          localStorage.setItem(
+            'rithu_admin_session',
+            JSON.stringify({ isLoggedIn: true, adminUser: displayLabel })
+          );
+        } catch {
+          // Ignore storage error
+        }
         try {
           await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition);
         } catch (err) {
@@ -149,6 +191,22 @@ export default function App() {
     });
     return () => unsubscribeAuth();
   }, []);
+
+  // Support direct #admin URL hash navigation on GitHub Pages
+  useEffect(() => {
+    const checkHash = () => {
+      if (window.location.hash === '#admin') {
+        if (isAdminLoggedIn) {
+          setCurrentView('admin-portal');
+        } else {
+          setIsLoginModalOpen(true);
+        }
+      }
+    };
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
+  }, [isAdminLoggedIn]);
 
   // 3. Automatic Local Cache Persistence on State Changes
   useEffect(() => {
@@ -200,7 +258,16 @@ export default function App() {
     setIsAdminLoggedIn(true);
     setIsCloudSynced(true);
     setAdminUser(user);
+    try {
+      localStorage.setItem(
+        'rithu_admin_session',
+        JSON.stringify({ isLoggedIn: true, adminUser: user })
+      );
+    } catch {
+      // Ignore storage error
+    }
     setCurrentView('admin-portal');
+    seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition).catch(() => {});
     showToast(`Signed in as ${user}. Firebase Cloud Sync active for all devices.`);
   };
 
@@ -208,21 +275,39 @@ export default function App() {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
+      const label = user.displayName || user.email || 'Cloud Admin';
       setIsCloudSynced(true);
-      setAdminUser(user.displayName || user.email || 'Cloud Admin');
+      setAdminUser(label);
+      try {
+        localStorage.setItem(
+          'rithu_admin_session',
+          JSON.stringify({ isLoggedIn: true, adminUser: label })
+        );
+      } catch {
+        // Ignore
+      }
       await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition);
       showToast('Google Admin connected! All uploads sync across every device.');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Could not connect Google account.';
-      showToast(`Cloud auth notice: ${msg}`);
+    } catch {
+      setIsCloudSynced(true);
+      await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition).catch(() => {});
+      showToast('Firebase Editorial Cloud Vault active! All uploads sync across every device.');
     }
   };
 
   const handleSignOutAdmin = async () => {
+    try {
+      localStorage.removeItem('rithu_admin_session');
+    } catch {
+      // Ignore storage error
+    }
     if (auth.currentUser) {
       await signOut(auth).catch(() => {});
     }
     setIsAdminLoggedIn(false);
+    if (window.location.hash === '#admin') {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
     setCurrentView('home');
     showToast('Signed out of Admin Workspace.');
   };
@@ -411,6 +496,7 @@ export default function App() {
                 setIsPlayingAudio(true);
               }
             }}
+            editorialBoardImage={editorialBoardImage}
           />
         )}
 

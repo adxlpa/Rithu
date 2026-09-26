@@ -1,12 +1,18 @@
 import React from 'react';
 import { ViewMode } from '../types';
+import { EditorialBoardSection } from '../components/EditorialBoardSection';
 
 interface HomeViewProps {
   onNavigate: (view: ViewMode) => void;
   onPlayAudioDirect: () => void;
+  editorialBoardImage?: string | null;
 }
 
-export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onPlayAudioDirect }) => {
+export const HomeView: React.FC<HomeViewProps> = ({
+  onNavigate,
+  onPlayAudioDirect,
+  editorialBoardImage,
+}) => {
   return (
     <div className="flex flex-col w-full pb-24 animate-fadeIn bg-[#FFF9F2] text-[#1F040A]">
       {/* Hero Section */}
@@ -27,30 +33,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onPlayAudioDirec
               A collection of voices, memories, creativity, and moments from the College of Engineering Munnar.
             </span>
           </p>
-
-          /*<div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-6">
-            <button
-              onClick={() => onNavigate('magazine')}
-              className="inline-flex items-center justify-center px-8 h-12 bg-[#800020] hover:bg-[#660019] text-[#FFF9F2] text-[15px] font-semibold rounded-[10px] shadow-md shadow-[#800020]/20 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
-            >
-              Read Magazine
-            </button>
-            <div className="flex items-center gap-3.5 text-[15px] font-semibold text-[#1F040A]">
-              <button
-                onClick={() => onNavigate('audio')}
-                className="hover:text-[#800020] transition-colors underline-offset-4 hover:underline cursor-pointer whitespace-nowrap"
-              >
-                Listen
-              </button>
-              <span className="text-[#800020] select-none">·</span>
-              <button
-                onClick={() => onNavigate('video')}
-                className="hover:text-[#800020] transition-colors underline-offset-4 hover:underline cursor-pointer whitespace-nowrap"
-              >
-                Watch
-              </button>
-            </div>
-          </div>*/
         </div>
 
         {/* Panoramic Landscape Hero Image */}
@@ -234,6 +216,9 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onPlayAudioDirec
           </div>
         </div>
       </section>
+
+      {/* Editorial Board Section */}
+      <EditorialBoardSection editorialBoardImage={editorialBoardImage} />
     </div>
   );
 };

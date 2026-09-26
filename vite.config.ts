@@ -4,10 +4,10 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 
-export default defineConfig(() => {
+export default defineConfig(({command}) => {
   return {
     plugins: [react(), tailwindcss()],
-    base: '/Rithu/',
+    base: command === 'build' ? './' : '/',
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
