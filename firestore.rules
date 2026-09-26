@@ -1,0 +1,428 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Hardened Global Helpers
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        request.auth.token.email == 'adhilpa004@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // =========================================================================
+    // Entity Validation Blueprints (Anti-Update-Gap)
+    // =========================================================================
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'role', 'createdByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'role', 'createdByUid', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.role is string && data.role.size() >= 1 && data.role.size() <= 32 && (data.role == 'editor' || data.role == 'super_admin')
+        && data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128 && data.createdByUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.createdByUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAudioTrack(data) {
+      return data.keys().hasAll([
+          'id',
+          'title',
+          'author',
+          'category',
+          'language',
+          'duration',
+          'durationSeconds',
+          'publishedDate',
+          'description',
+          'isPublic',
+          'createdByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'title',
+          'englishSubtitle',
+          'author',
+          'category',
+          'language',
+          'duration',
+          'durationSeconds',
+          'publishedDate',
+          'description',
+          'coverImage',
+          'audioUrl',
+          'isPublic',
+          'createdByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && (!('englishSubtitle' in data) || (data.englishSubtitle is string && data.englishSubtitle.size() <= 200))
+        && data.author is string && data.author.size() >= 1 && data.author.size() <= 120
+        && data.category is string && data.category.size() >= 1 && data.category.size() <= 32
+        && (
+          data.category == 'Travelogue' ||
+          data.category == 'Editorial' ||
+          data.category == 'Poetry' ||
+          data.category == 'Interview' ||
+          data.category == 'Fiction' ||
+          data.category == 'Discussion'
+        )
+        && data.language is string && data.language.size() >= 1 && data.language.size() <= 32
+        && (
+          data.language == 'Malayalam' ||
+          data.language == 'English' ||
+          data.language == 'Bilingual'
+        )
+        && data.duration is string && data.duration.size() >= 1 && data.duration.size() <= 20
+        && data.durationSeconds is int && data.durationSeconds >= 1 && data.durationSeconds <= 86400
+        && data.publishedDate is string && data.publishedDate.size() >= 1 && data.publishedDate.size() <= 50
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 2000
+        && (!('coverImage' in data) || (data.coverImage is string && data.coverImage.size() <= 700000))
+        && (!('audioUrl' in data) || (data.audioUrl is string && data.audioUrl.size() <= 700000))
+        && data.isPublic is bool
+        && data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128 && data.createdByUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.createdByUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidVideoItem(data) {
+      return data.keys().hasAll([
+          'id',
+          'title',
+          'dateStr',
+          'category',
+          'duration',
+          'durationSeconds',
+          'image',
+          'imageAlt',
+          'isPublic',
+          'createdByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'title',
+          'dateStr',
+          'category',
+          'duration',
+          'durationSeconds',
+          'image',
+          'imageAlt',
+          'isFeatured',
+          'tagline',
+          'description',
+          'videoUrl',
+          'isPublic',
+          'createdByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.dateStr is string && data.dateStr.size() >= 1 && data.dateStr.size() <= 50
+        && data.category is string && data.category.size() >= 1 && data.category.size() <= 32
+        && (
+          data.category == 'Events' ||
+          data.category == 'Workshops' ||
+          data.category == 'IEEE' ||
+          data.category == 'Interviews'
+        )
+        && data.duration is string && data.duration.size() >= 1 && data.duration.size() <= 20
+        && data.durationSeconds is int && data.durationSeconds >= 1 && data.durationSeconds <= 86400
+        && data.image is string && data.image.size() >= 1 && data.image.size() <= 700000
+        && data.imageAlt is string && data.imageAlt.size() >= 1 && data.imageAlt.size() <= 200
+        && (!('isFeatured' in data) || (data.isFeatured is bool))
+        && (!('tagline' in data) || (data.tagline is string && data.tagline.size() <= 200))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 2000))
+        && (!('videoUrl' in data) || (data.videoUrl is string && data.videoUrl.size() <= 2000))
+        && data.isPublic is bool
+        && data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128 && data.createdByUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.createdByUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMagazineEdition(data) {
+      return data.keys().hasAll([
+          'id',
+          'title',
+          'year',
+          'institution',
+          'totalPages',
+          'sourceType',
+          'isPublic',
+          'createdByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'title',
+          'year',
+          'institution',
+          'totalPages',
+          'sourceType',
+          'fileName',
+          'isPublic',
+          'createdByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.year is string && data.year.size() >= 1 && data.year.size() <= 20
+        && data.institution is string && data.institution.size() >= 1 && data.institution.size() <= 200
+        && data.totalPages is int && data.totalPages >= 1 && data.totalPages <= 200
+        && data.sourceType is string && data.sourceType.size() >= 1 && data.sourceType.size() <= 20
+        && (data.sourceType == 'curated' || data.sourceType == 'pdf')
+        && (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 255))
+        && data.isPublic is bool
+        && data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128 && data.createdByUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.createdByUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMagazinePage(data) {
+      return data.keys().hasAll([
+          'id',
+          'editionId',
+          'pageNumber',
+          'type',
+          'title',
+          'subtitle',
+          'pdfImageUrl',
+          'isPublic',
+          'createdByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'editionId',
+          'pageNumber',
+          'type',
+          'title',
+          'subtitle',
+          'pdfImageUrl',
+          'isPublic',
+          'createdByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.editionId is string && data.editionId.size() >= 1 && data.editionId.size() <= 128 && data.editionId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.pageNumber is int && data.pageNumber >= 0 && data.pageNumber <= 200
+        && data.type is string && data.type.size() >= 1 && data.type.size() <= 20
+        && (data.type == 'cover' || data.type == 'content' || data.type == 'back-cover')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.subtitle is string && data.subtitle.size() >= 1 && data.subtitle.size() <= 200
+        && data.pdfImageUrl is string && data.pdfImageUrl.size() >= 1 && data.pdfImageUrl.size() <= 850000
+        && data.isPublic is bool
+        && data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128 && data.createdByUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.createdByUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // =========================================================================
+    // Collection Match Blocks
+    // =========================================================================
+
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (
+        (isVerified() && request.auth.uid == adminId) || isAdmin()
+      );
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isValidId(adminId)
+        && isValidAdminRecord(incoming())
+        && incoming().uid == adminId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow update: if isSignedIn()
+        && isValidAdminRecord(incoming())
+        && isValidId(adminId)
+        && incoming().uid == existing().uid
+        && incoming().createdByUid == existing().createdByUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt'])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(adminId) && isAdmin();
+    }
+
+    match /audio_tracks/{trackId} {
+      allow get: if isValidId(trackId) && existing().isPublic == true;
+      allow list: if existing().isPublic == true;
+      allow create: if isSignedIn()
+        && isValidId(trackId)
+        && isValidAudioTrack(incoming())
+        && incoming().id == trackId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow update: if isSignedIn()
+        && isValidAudioTrack(incoming())
+        && isValidId(trackId)
+        && incoming().id == existing().id
+        && incoming().createdByUid == existing().createdByUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'englishSubtitle',
+          'author',
+          'category',
+          'language',
+          'duration',
+          'durationSeconds',
+          'publishedDate',
+          'description',
+          'coverImage',
+          'audioUrl',
+          'isPublic',
+          'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(trackId) && isAdmin();
+    }
+
+    match /video_items/{videoId} {
+      allow get: if isValidId(videoId) && existing().isPublic == true;
+      allow list: if existing().isPublic == true;
+      allow create: if isSignedIn()
+        && isValidId(videoId)
+        && isValidVideoItem(incoming())
+        && incoming().id == videoId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow update: if isSignedIn()
+        && isValidVideoItem(incoming())
+        && isValidId(videoId)
+        && incoming().id == existing().id
+        && incoming().createdByUid == existing().createdByUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'dateStr',
+          'category',
+          'duration',
+          'durationSeconds',
+          'image',
+          'imageAlt',
+          'isFeatured',
+          'tagline',
+          'description',
+          'videoUrl',
+          'isPublic',
+          'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(videoId) && isAdmin();
+    }
+
+    match /magazine_edition/{editionId} {
+      allow get: if isValidId(editionId) && existing().isPublic == true;
+      allow list: if existing().isPublic == true;
+      allow create: if isSignedIn()
+        && isValidId(editionId)
+        && isValidMagazineEdition(incoming())
+        && incoming().id == editionId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow update: if isSignedIn()
+        && isValidMagazineEdition(incoming())
+        && isValidId(editionId)
+        && incoming().id == existing().id
+        && incoming().createdByUid == existing().createdByUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'year',
+          'institution',
+          'totalPages',
+          'sourceType',
+          'fileName',
+          'isPublic',
+          'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(editionId) && isAdmin();
+    }
+
+    match /magazine_pages/{pageId} {
+      allow get: if isValidId(pageId) && existing().isPublic == true;
+      allow list: if existing().isPublic == true;
+      allow create: if isSignedIn()
+        && isValidId(pageId)
+        && isValidMagazinePage(incoming())
+        && incoming().id == pageId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin()
+        && (
+          exists(/databases/$(database)/documents/magazine_edition/$(incoming().editionId)) ||
+          existsAfter(/databases/$(database)/documents/magazine_edition/$(incoming().editionId))
+        );
+      allow update: if isSignedIn()
+        && isValidMagazinePage(incoming())
+        && isValidId(pageId)
+        && incoming().id == existing().id
+        && incoming().editionId == existing().editionId
+        && incoming().createdByUid == existing().createdByUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'pageNumber',
+          'type',
+          'title',
+          'subtitle',
+          'pdfImageUrl',
+          'isPublic',
+          'updatedAt'
+        ])
+        && isAdmin()
+        && exists(/databases/$(database)/documents/magazine_edition/$(incoming().editionId));
+      allow delete: if isSignedIn() && isValidId(pageId) && isAdmin();
+    }
+  }
+}

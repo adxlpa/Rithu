@@ -10,6 +10,8 @@ export interface AudioTrack {
   publishedDate: string;
   description: string;
   coverImage?: string;
+  audioUrl?: string;
+  createdByUid?: string;
 }
 
 export interface VideoItem {
@@ -24,6 +26,8 @@ export interface VideoItem {
   isFeatured?: boolean;
   tagline?: string;
   description?: string;
+  videoUrl?: string;
+  createdByUid?: string;
 }
 
 export interface MagazineSpread {

@@ -1,0 +1,440 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Represents an authorized editorial administrator UID in the Rithu archive.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the administrator.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "role": {
+          "type": "string",
+          "description": "Assigned administrative tier.",
+          "enum": ["editor", "super_admin"]
+        },
+        "createdByUid": {
+          "type": "string",
+          "description": "UID of the admin who granted access.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the admin record was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the admin record was last updated."
+        }
+      },
+      "required": ["uid", "role", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "AudioTrack": {
+      "title": "AudioTrack",
+      "description": "Spoken word, travelogue, poetry, or editorial audio track in the Rithu Sound Archives.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the audio track.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Track title in Malayalam or English.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "englishSubtitle": {
+          "type": "string",
+          "description": "Optional English subtitle or translation.",
+          "maxLength": 200
+        },
+        "author": {
+          "type": "string",
+          "description": "Creator or narrator name.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "category": {
+          "type": "string",
+          "description": "Editorial classification category.",
+          "enum": ["Travelogue", "Editorial", "Poetry", "Interview", "Fiction", "Discussion"]
+        },
+        "language": {
+          "type": "string",
+          "description": "Primary spoken language of the piece.",
+          "enum": ["Malayalam", "English", "Bilingual"]
+        },
+        "duration": {
+          "type": "string",
+          "description": "Formatted duration string (mm:ss).",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "durationSeconds": {
+          "type": "integer",
+          "description": "Duration of the track in seconds."
+        },
+        "publishedDate": {
+          "type": "string",
+          "description": "Display publication date string.",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "description": {
+          "type": "string",
+          "description": "Editorial synopsis and context.",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "coverImage": {
+          "type": "string",
+          "description": "Optional URL or data URL for track cover artwork.",
+          "maxLength": 700000
+        },
+        "audioUrl": {
+          "type": "string",
+          "description": "Optional URL or encoded audio stream.",
+          "maxLength": 700000
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Whether the audio track is publicly visible across all devices."
+        },
+        "createdByUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the publishing admin.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-modified timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "author",
+        "category",
+        "language",
+        "duration",
+        "durationSeconds",
+        "publishedDate",
+        "description",
+        "isPublic",
+        "createdByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "VideoItem": {
+      "title": "VideoItem",
+      "description": "Campus documentary, event highlight, or symposium video record.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the video item.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the video record.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "dateStr": {
+          "type": "string",
+          "description": "Formatted event or publication date string.",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "category": {
+          "type": "string",
+          "description": "Archive category.",
+          "enum": ["Events", "Workshops", "IEEE", "Interviews"]
+        },
+        "duration": {
+          "type": "string",
+          "description": "Formatted duration string (mm:ss).",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "durationSeconds": {
+          "type": "integer",
+          "description": "Duration in seconds."
+        },
+        "image": {
+          "type": "string",
+          "description": "Poster thumbnail URL or data URL.",
+          "minLength": 1,
+          "maxLength": 700000
+        },
+        "imageAlt": {
+          "type": "string",
+          "description": "Accessible alt text for poster image.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "isFeatured": {
+          "type": "boolean",
+          "description": "Whether the video is highlighted as featured."
+        },
+        "tagline": {
+          "type": "string",
+          "description": "Short subtitle or event tagline.",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "description": "Archival description of the video.",
+          "maxLength": 2000
+        },
+        "videoUrl": {
+          "type": "string",
+          "description": "Optional external video stream URL or embed link.",
+          "maxLength": 2000
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Whether the video is publicly visible across all devices."
+        },
+        "createdByUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the publishing admin.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-modified timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "dateStr",
+        "category",
+        "duration",
+        "durationSeconds",
+        "image",
+        "imageAlt",
+        "isPublic",
+        "createdByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "MagazineEdition": {
+      "title": "MagazineEdition",
+      "description": "Metadata for the active live magazine edition.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Edition document identifier (e.g., 'current').",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Edition title.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "year": {
+          "type": "string",
+          "description": "Publication year string.",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "institution": {
+          "type": "string",
+          "description": "Publishing institution name.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "totalPages": {
+          "type": "integer",
+          "description": "Total number of pages in the active edition."
+        },
+        "sourceType": {
+          "type": "string",
+          "description": "Whether the edition uses curated spreads or rendered PDF pages.",
+          "enum": ["curated", "pdf"]
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Optional uploaded PDF filename.",
+          "maxLength": 255
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Whether this edition is publicly readable."
+        },
+        "createdByUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the admin who updated the edition.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "year",
+        "institution",
+        "totalPages",
+        "sourceType",
+        "isPublic",
+        "createdByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "MagazinePage": {
+      "title": "MagazinePage",
+      "description": "Individual rendered page of a custom PDF magazine edition stored as a separate document to stay well within Firestore's 1MB limit.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the page document.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "editionId": {
+          "type": "string",
+          "description": "Parent magazine edition document ID (e.g., 'current').",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "pageNumber": {
+          "type": "integer",
+          "description": "Zero-or-one indexed page order number."
+        },
+        "type": {
+          "type": "string",
+          "description": "Page layout role in the 3D flipbook.",
+          "enum": ["cover", "content", "back-cover"]
+        },
+        "title": {
+          "type": "string",
+          "description": "Page label or heading.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "subtitle": {
+          "type": "string",
+          "description": "Page subtitle or folio description.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "pdfImageUrl": {
+          "type": "string",
+          "description": "Rendered page JPEG data URL or hosted image URL.",
+          "minLength": 1,
+          "maxLength": 850000
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Whether the page is publicly readable."
+        },
+        "createdByUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the publishing admin.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "editionId",
+        "pageNumber",
+        "type",
+        "title",
+        "subtitle",
+        "pdfImageUrl",
+        "isPublic",
+        "createdByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Authorized administrators who can create, update, and delete magazine, audio, and video records."
+    },
+    "/audio_tracks/{trackId}": {
+      "schema": { "$ref": "#/entities/AudioTrack" },
+      "description": "Publicly readable audio tracks managed by editorial admins."
+    },
+    "/video_items/{videoId}": {
+      "schema": { "$ref": "#/entities/VideoItem" },
+      "description": "Publicly readable campus video archive records managed by editorial admins."
+    },
+    "/magazine_edition/{editionId}": {
+      "schema": { "$ref": "#/entities/MagazineEdition" },
+      "description": "Active magazine edition metadata synced across all devices."
+    },
+    "/magazine_pages/{pageId}": {
+      "schema": { "$ref": "#/entities/MagazinePage" },
+      "description": "Individual rendered PDF magazine pages linked to an active magazine_edition."
+    }
+  }
+}

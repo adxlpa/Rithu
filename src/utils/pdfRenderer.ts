@@ -44,8 +44,8 @@ export async function renderPdfToMagazinePages(
 
   for (let i = 1; i <= numPages; i++) {
     const page = await pdfDoc.getPage(i);
-    // Render at 1.6 scale for high visual fidelity
-    const viewport = page.getViewport({ scale: 1.6 });
+    // Render at 1.4 scale for crisp visual fidelity while staying within cloud document limits
+    const viewport = page.getViewport({ scale: 1.4 });
 
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
@@ -66,7 +66,13 @@ export async function renderPdfToMagazinePages(
       canvas,
     }).promise;
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    let dataUrl = canvas.toDataURL('image/jpeg', 0.84);
+    if (dataUrl.length > 750000) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+    }
+    if (dataUrl.length > 820000) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+    }
 
     const isFirst = i === 1;
     const isLast = i === numPages;

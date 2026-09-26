@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
+import { auth, googleProvider, signInWithPopup, BOOTSTRAPPED_ADMIN_EMAIL } from '../firebase';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (username: string) => void;
+  onLoginSuccess: (username: string, isCloudAdmin?: boolean) => void;
 }
 
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
@@ -15,18 +16,37 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   if (!isOpen) return null;
+
+  const handleGoogleLogin = async () => {
+    setErrorMsg('');
+    setIsGoogleLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      const displayLabel = user.displayName || user.email || 'Cloud Admin';
+      onLoginSuccess(displayLabel, true);
+      onClose();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Google Sign-In failed.';
+      setErrorMsg(message);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (
-      (username.trim().toLowerCase() === 'admin' && (password === 'rithu2026' || password === 'admin' || password === 'admin123')) ||
+      (username.trim().toLowerCase() === 'admin' &&
+        (password === 'rithu2026' || password === 'admin' || password === 'admin123')) ||
       (username.trim().toLowerCase() === 'editor' && password === 'rithu2026') ||
       (password.length >= 4 && username.trim().length >= 3)
     ) {
       setErrorMsg('');
-      onLoginSuccess(username.trim());
+      onLoginSuccess(username.trim(), Boolean(auth.currentUser));
       onClose();
     } else {
       setErrorMsg('Invalid credentials. (Hint: username "admin", password "rithu2026")');
@@ -45,7 +65,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[420px] bg-[#140307] rounded-2xl p-6 sm:p-8 shadow-2xl border border-[#3A0C16] flex flex-col gap-6 text-[#FFF9F2]"
+        className="w-full max-w-[440px] bg-[#140307] rounded-2xl p-6 sm:p-8 shadow-2xl border border-[#3A0C16] flex flex-col gap-5 text-[#FFF9F2]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -67,15 +87,41 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </button>
         </div>
 
+        {errorMsg && (
+          <div className="p-3 rounded-lg bg-[#3A0C16] border border-[#D45060]/50 text-[#D45060] text-[13px] flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px]">error</span>
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Primary Cloud Auth (Google Sign-In for Cross-Device Firestore Sync) */}
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isGoogleLoading}
+            className="w-full h-11 px-4 rounded-[10px] bg-[#FFF9F2] hover:bg-[#F3E6D5] text-[#140307] font-semibold text-[14px] flex items-center justify-center gap-2.5 shadow-md transition-all cursor-pointer disabled:opacity-60"
+          >
+            <span className="material-symbols-outlined text-[20px] text-[#800020]">cloud_sync</span>
+            <span>
+              {isGoogleLoading ? 'Connecting to Cloud Vault...' : 'Sign in with Google (Sync All Devices)'}
+            </span>
+          </button>
+          <p className="text-[11px] text-[#F3E6D5]/70 text-center">
+            Recommended: Sign in with admin Google account ({BOOTSTRAPPED_ADMIN_EMAIL}) to publish changes permanently across every device.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-[#3A0C16]" />
+          <span className="text-[11px] uppercase tracking-wider text-[#F3E6D5]/50 font-mono">
+            Or Local Editorial Passcode
+          </span>
+          <div className="h-px flex-1 bg-[#3A0C16]" />
+        </div>
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-left">
-          {errorMsg && (
-            <div className="p-3 rounded-lg bg-[#3A0C16] border border-[#D45060]/50 text-[#D45060] text-[13px] flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px]">error</span>
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
           <div className="flex flex-col gap-1.5">
             <label className="text-[13px] font-medium text-[#F3E6D5]/80" htmlFor="admin-username">
               Username
@@ -116,7 +162,9 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </div>
 
           <div className="flex items-center justify-between text-[12px] text-[#F3E6D5]/80 pt-1">
-            <span>Demo: <strong>admin</strong> / <strong>rithu2026</strong></span>
+            <span>
+              Passcode: <strong>admin</strong> / <strong>rithu2026</strong>
+            </span>
             <button
               type="button"
               onClick={handleQuickFill}

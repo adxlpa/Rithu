@@ -20,6 +20,8 @@ interface AdminViewProps {
   onNavigate: (view: ViewMode) => void;
   onSignOut: () => void;
   adminUser?: string;
+  isCloudSynced?: boolean;
+  onConnectCloudAdmin?: () => void;
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({
@@ -40,6 +42,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onNavigate,
   onSignOut,
   adminUser = 'Editor',
+  isCloudSynced = false,
+  onConnectCloudAdmin,
 }) => {
   const [activeTab, setActiveTab] = useState<'magazine' | 'audio' | 'video'>('magazine');
 
@@ -62,6 +66,44 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [audioDuration, setAudioDuration] = useState('4:30');
   const [audioFileName, setAudioFileName] = useState('');
   const [audioCoverName, setAudioCoverName] = useState('');
+  const [audioCoverDataUrl, setAudioCoverDataUrl] = useState('');
+
+  const compressImageFileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 900;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context unavailable'));
+            return;
+          }
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        };
+        img.onerror = () => reject(new Error('Invalid image file'));
+        img.src = reader.result as string;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
 
   // Video Form State
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
@@ -158,6 +200,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
           description: audioDescription.trim(),
           duration: audioDuration.trim(),
           durationSeconds: totalSecs || existing.durationSeconds,
+          coverImage: audioCoverDataUrl || existing.coverImage,
         });
         showToast(`Updated "${audioTitle}" successfully.`);
       }
@@ -173,6 +216,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         duration: audioDuration.trim() || '4:15',
         durationSeconds: totalSecs || 255,
         publishedDate: 'Feb 2026',
+        ...(audioCoverDataUrl ? { coverImage: audioCoverDataUrl } : {}),
       };
       onAddAudioTrack(newTrack);
       showToast(`Published "${audioTitle}" to the college audio journal.`);
@@ -184,6 +228,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setAudioDescription('');
     setAudioFileName('');
     setAudioCoverName('');
+    setAudioCoverDataUrl('');
     setAudioDuration('4:30');
   };
 
@@ -325,9 +370,29 @@ export const AdminView: React.FC<AdminViewProps> = ({
           <header className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#3A0C16]">
             <div className="flex items-center justify-between sm:justify-start gap-4 sm:gap-6">
               <div className="flex flex-col">
-                <span className="text-[20px] leading-[28px] font-semibold text-[#FFF9F2] tracking-tight">
-                  Rithu Admin
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[20px] leading-[28px] font-semibold text-[#FFF9F2] tracking-tight">
+                    Rithu Admin
+                  </span>
+                  {isCloudSynced ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#800020]/40 border border-[#D45060]/50 text-[11px] font-medium text-[#FFF9F2]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Cloud Sync Active (All Devices)
+                    </span>
+                  ) : (
+                    onConnectCloudAdmin && (
+                      <button
+                        type="button"
+                        onClick={onConnectCloudAdmin}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#D45060]/20 hover:bg-[#D45060]/30 border border-[#D45060]/50 text-[11px] font-medium text-[#FFF9F2] transition-colors cursor-pointer"
+                        title="Connect Google Admin account so uploads sync across every device"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">cloud_upload</span>
+                        <span>Enable Global Device Sync</span>
+                      </button>
+                    )
+                  )}
+                </div>
                 <span className="text-[12px] text-[#F3E6D5]/80">
                   Signed in as <strong className="text-[#FFF9F2]">{adminUser}</strong>
                 </span>
@@ -827,9 +892,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             accept="image/*"
                             className="sr-only"
                             type="file"
-                            onChange={(e) => {
+                            onChange={async (e) => {
                               if (e.target.files && e.target.files[0]) {
-                                setAudioCoverName(e.target.files[0].name);
+                                const file = e.target.files[0];
+                                setAudioCoverName(file.name);
+                                try {
+                                  const compressed = await compressImageFileToDataUrl(file);
+                                  setAudioCoverDataUrl(compressed);
+                                } catch {
+                                  // Keep filename if compression fails
+                                }
                               }
                             }}
                           />
@@ -1090,9 +1162,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             accept="video/*,image/*"
                             className="sr-only"
                             type="file"
-                            onChange={(e) => {
+                            onChange={async (e) => {
                               if (e.target.files && e.target.files[0]) {
-                                setVideoFileName(e.target.files[0].name);
+                                const file = e.target.files[0];
+                                setVideoFileName(file.name);
+                                if (file.type.startsWith('image/')) {
+                                  try {
+                                    const compressed = await compressImageFileToDataUrl(file);
+                                    setVideoImageUrl(compressed);
+                                  } catch {
+                                    // Ignore
+                                  }
+                                }
                               }
                             }}
                           />
