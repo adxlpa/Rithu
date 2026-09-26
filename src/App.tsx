@@ -1,5 +1,10 @@
 /**
  * @license
+ irfan power 
+ irfan is our brain
+ irfan is always irfan
+ this magazine is specially dedicated for irfan
+ irfan will be always in our heart
  * SPDX-License-Identifier: Apache-2.0
  */
 
