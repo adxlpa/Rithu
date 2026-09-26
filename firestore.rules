@@ -39,6 +39,7 @@ service cloud.firestore {
 
     function hasEditorialWriteAuth(data) {
       return isAdmin() || (
+        isVerified() &&
         data.editorialKey is string &&
         data.editorialKey.size() >= 1 &&
         data.editorialKey.size() <= 64 &&
@@ -48,12 +49,14 @@ service cloud.firestore {
 
     function hasEditorialDeleteAuth() {
       return isAdmin() || (
+        isVerified() &&
         'editorialKey' in existing() &&
         existing().editorialKey is string &&
         existing().editorialKey.size() >= 1 &&
         existing().editorialKey.size() <= 64 &&
         existing().editorialKey == 'rithu2026-cem-vault'
       ) || (
+        isVerified() &&
         !('editorialKey' in existing()) &&
         existing().isPublic == true &&
         existing().createdByUid is string &&
@@ -67,9 +70,7 @@ service cloud.firestore {
     }
 
     function isValidCreatorIdentity(uid) {
-      return isValidCreatorUidFormat(uid) && (
-        (isSignedIn() && uid == request.auth.uid) || uid == 'rithu-editorial-admin'
-      );
+      return isValidCreatorUidFormat(uid) && isSignedIn() && isVerified() && uid == request.auth.uid;
     }
 
     // =========================================================================
@@ -246,7 +247,7 @@ service cloud.firestore {
         && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
         && data.year is string && data.year.size() >= 1 && data.year.size() <= 20
         && data.institution is string && data.institution.size() >= 1 && data.institution.size() <= 200
-        && data.totalPages is int && data.totalPages >= 1 && data.totalPages <= 200
+        && data.totalPages is int && data.totalPages >= 1 && data.totalPages <= 500
         && data.sourceType is string && data.sourceType.size() >= 1 && data.sourceType.size() <= 20
         && (data.sourceType == 'curated' || data.sourceType == 'pdf')
         && (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 255))
@@ -288,7 +289,7 @@ service cloud.firestore {
         ])
         && data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$')
         && data.editionId is string && data.editionId.size() >= 1 && data.editionId.size() <= 128 && data.editionId.matches('^[a-zA-Z0-9_\\-]+$')
-        && data.pageNumber is int && data.pageNumber >= 0 && data.pageNumber <= 200
+        && data.pageNumber is int && data.pageNumber >= 0 && data.pageNumber <= 500
         && data.type is string && data.type.size() >= 1 && data.type.size() <= 20
         && (data.type == 'cover' || data.type == 'content' || data.type == 'back-cover')
         && data.title is string && data.title.size() >= 1 && data.title.size() <= 200

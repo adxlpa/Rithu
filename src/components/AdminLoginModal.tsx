@@ -4,7 +4,7 @@ import { auth, googleProvider, signInWithPopup } from '../firebase';
 interface AdminLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (username: string, isCloudAdmin?: boolean) => void;
+  onLoginSuccess: (username: string) => void;
 }
 
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
@@ -12,10 +12,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onClose,
   onLoginSuccess,
 }) => {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('rithu2026');
   const [errorMsg, setErrorMsg] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -26,72 +23,31 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-      const displayLabel = user.displayName || user.email || 'Cloud Admin';
-      onLoginSuccess(displayLabel, true);
+      const displayLabel = user.displayName || user.email || 'Google Admin';
+      onLoginSuccess(displayLabel);
       onClose();
     } catch (err: unknown) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const errCode = (err as { code?: string })?.code || '';
 
-      // When hosted on GitHub Pages (*.github.io) or custom domains not yet added to
-      // Firebase Console -> Authentication -> Settings -> Authorized domains,
-      // Firebase throws auth/unauthorized-domain (or popup blocked).
-      // Fall back seamlessly to Editorial Cloud Vault authentication so login & Firebase
-      // uploads work immediately on GitHub Pages!
-      if (
-        errCode.includes('unauthorized-domain') ||
-        errCode.includes('operation-not-supported') ||
-        errCode.includes('popup-blocked') ||
-        rawMessage.includes('unauthorized-domain') ||
-        rawMessage.includes('popup-blocked')
-      ) {
-        onLoginSuccess('Admin (Cloud Vault)', true);
-        onClose();
-        return;
-      }
-
       if (errCode.includes('popup-closed-by-user') || rawMessage.includes('popup-closed-by-user')) {
-        setErrorMsg('Google sign-in popup was closed. You can click "Sign In to Archive" above to log in directly.');
-      } else {
-        // Even if another browser restriction blocks third-party popups, allow seamless fallback if passcode is ready
+        setErrorMsg('Google sign-in popup was closed before completing authentication. Please try again.');
+      } else if (
+        errCode.includes('unauthorized-domain') ||
+        rawMessage.includes('unauthorized-domain')
+      ) {
+        const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
         setErrorMsg(
-          'Google popup could not open on this host. Click "Sign In to Archive" below to log in with Editorial Cloud Sync.'
+          `Domain "${currentHost}" is not yet authorized in Firebase Auth. Add "${currentHost}" under Firebase Console → Authentication → Settings → Authorized domains.`
         );
+      } else if (errCode.includes('popup-blocked') || rawMessage.includes('popup-blocked')) {
+        setErrorMsg('Sign-in popup was blocked by your browser. Please allow popups for this site and try again.');
+      } else {
+        setErrorMsg('Google Firebase sign-in failed. Please try again.');
       }
     } finally {
       setIsGoogleLoading(false);
     }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanUser = username.trim().toLowerCase();
-    const cleanPass = password.trim();
-
-    if (
-      cleanPass === 'rithu2026' ||
-      cleanPass === 'rithu' ||
-      cleanPass === 'admin' ||
-      cleanPass === 'admin123' ||
-      cleanUser === 'adhilpa004@gmail.com' ||
-      (cleanUser.length >= 3 && cleanPass.length >= 4)
-    ) {
-      setErrorMsg('');
-      const label =
-        cleanUser === 'admin' || cleanUser === ''
-          ? 'Admin'
-          : username.trim();
-      onLoginSuccess(label, true);
-      onClose();
-    } else {
-      setErrorMsg('Invalid credentials. Use username "admin" and password "rithu2026".');
-    }
-  };
-
-  const handleQuickFill = () => {
-    setUsername('admin');
-    setPassword('rithu2026');
-    setErrorMsg('');
   };
 
   return (
@@ -100,18 +56,22 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[440px] bg-[#FFF9F2] rounded-2xl p-6 sm:p-8 shadow-2xl border border-[#E6D5C1] flex flex-col gap-5 text-[#1F040A]"
+        className="w-full max-w-[440px] bg-[#FFF9F2] rounded-2xl p-6 sm:p-8 shadow-2xl border border-[#E6D5C1] flex flex-col gap-6 text-[#1F040A]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#E6D5C1]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-[#800020] flex items-center justify-center text-[#FFF9F2] shadow-xs">
-              <span className="material-symbols-outlined text-[20px]">lock</span>
+        <div className="flex items-center justify-between pb-4 border-b border-[#E6D5C1]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#800020] flex items-center justify-center text-[#FFF9F2] shadow-xs">
+              <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
             </div>
             <div>
-              <h3 className="text-[18px] font-semibold text-[#1F040A] leading-tight">Admin Sign In</h3>
-              <p className="text-[12px] text-[#5C3A42]">Rithu College Magazine Editorial Vault</p>
+              <h3 className="text-[19px] font-semibold text-[#1F040A] leading-tight font-serif">
+                Admin Sign In
+              </h3>
+              <p className="text-[12px] text-[#5C3A42]">
+                Google Firebase Editorial Authentication
+              </p>
             </div>
           </div>
           <button
@@ -123,103 +83,63 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </button>
         </div>
 
+        {/* Info Card */}
+        <div className="p-4 rounded-xl bg-[#F3E6D5]/70 border border-[#E6D5C1] flex flex-col gap-2 text-left">
+          <div className="flex items-center gap-2 text-[#800020] text-[13px] font-semibold">
+            <span className="material-symbols-outlined text-[18px]">cloud_done</span>
+            <span>Real-Time Global Cloud Sync</span>
+          </div>
+          <p className="text-[13px] text-[#5C3A42] leading-relaxed">
+            Sign in with Google via Firebase Authentication. Any magazine PDF, audio track, or video you upload, edit, or delete will immediately sync across Firebase and reflect everywhere for all visitors.
+          </p>
+        </div>
+
         {errorMsg && (
-          <div className="p-3 rounded-lg bg-[#800020]/10 border border-[#800020]/30 text-[#800020] text-[13px] flex items-center gap-2">
-            <span className="material-symbols-outlined text-[18px]">error</span>
+          <div className="p-3.5 rounded-xl bg-[#800020]/10 border border-[#800020]/30 text-[#800020] text-[13px] flex items-start gap-2.5 text-left">
+            <span className="material-symbols-outlined text-[18px] mt-0.5 shrink-0">error</span>
             <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-left">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[13px] font-medium text-[#5C3A42]" htmlFor="admin-username">
-              Username or Email
-            </label>
-            <input
-              id="admin-username"
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="admin"
-              className="h-11 px-3.5 rounded-[10px] bg-white border border-[#E6D5C1] text-[15px] text-[#1F040A] placeholder-[#5C3A42]/50 outline-none focus:border-[#800020] focus:ring-2 focus:ring-[#800020]/15 transition-all"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-[13px] font-medium text-[#5C3A42]" htmlFor="admin-password">
-                Editorial Passcode
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="text-[12px] text-[#800020] hover:underline cursor-pointer"
-              >
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
-            </div>
-            <input
-              id="admin-password"
-              type={showPassword ? 'text' : 'password'}
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password (rithu2026)"
-              className="h-11 px-3.5 rounded-[10px] bg-white border border-[#E6D5C1] text-[15px] text-[#1F040A] placeholder-[#5C3A42]/50 outline-none focus:border-[#800020] focus:ring-2 focus:ring-[#800020]/15 transition-all"
-            />
-          </div>
-
-          <div className="flex items-center justify-between text-[12px] text-[#5C3A42] pt-1">
+        {/* Google Sign-In Button */}
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isGoogleLoading}
+            className="w-full h-12 px-5 rounded-xl bg-[#800020] hover:bg-[#660019] text-[#FFF9F2] font-semibold text-[15px] flex items-center justify-center gap-3 shadow-lg shadow-[#800020]/20 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-60"
+          >
+            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="#FFFFFF"
+                d="M21.35 11.1h-9.17v2.73h6.51c-.33 1.81-1.5 3.34-3.2 4.37v3.62h5.18c3.03-2.79 4.78-6.9 4.78-11.77 0-.8-.08-1.58-.23-2.35Z"
+              />
+              <path
+                fill="#F3E6D5"
+                d="M12.18 22c4.32 0 7.95-1.43 10.6-3.88l-5.18-3.62c-1.43.96-3.27 1.53-5.42 1.53-4.17 0-7.7-2.81-8.96-6.6H-.1v3.74C2.54 18.42 7.01 22 12.18 22Z"
+              />
+              <path
+                fill="#EAD8C3"
+                d="M3.22 9.43A9.56 9.56 0 0 1 2.7 6.3c0-1.09.19-2.15.52-3.13V-.57H-.1A11.97 11.97 0 0 0-1.82 6.3c0 1.93.46 3.75 1.72 5.47l3.32-2.34Z"
+              />
+              <path
+                fill="#FFF9F2"
+                d="M12.18 2.58c2.35 0 4.46.81 6.12 2.4l4.59-4.59C20.12-2.18 16.5-3.6 12.18-3.6 7.01-3.6 2.54-.02-.1 5.23l3.32 2.57c1.26-3.79 4.79-5.22 8.96-5.22Z"
+              />
+            </svg>
             <span>
-              Passcode: <strong>admin</strong> / <strong>rithu2026</strong>
+              {isGoogleLoading ? 'Signing in with Google...' : 'Sign in with Google (Firebase)'}
             </span>
-            <button
-              type="button"
-              onClick={handleQuickFill}
-              className="text-[#800020] hover:underline cursor-pointer font-medium"
-            >
-              Reset Default Credentials
-            </button>
-          </div>
+          </button>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E6D5C1]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-[14px] font-medium text-[#5C3A42] hover:text-[#1F040A] transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2.5 rounded-[10px] bg-[#800020] hover:bg-[#660019] text-[#FFF9F2] text-[14px] font-semibold shadow-md shadow-[#800020]/20 active:scale-[0.98] transition-all cursor-pointer"
-            >
-              Sign In to Archive
-            </button>
-          </div>
-        </form>
-
-        <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-[#E6D5C1]" />
-          <span className="text-[11px] uppercase tracking-wider text-[#5C3A42]/70 font-mono">
-            Or Quick Cloud Login
-          </span>
-          <div className="h-px flex-1 bg-[#E6D5C1]" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2 text-[13px] font-medium text-[#5C3A42] hover:text-[#1F040A] transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={isGoogleLoading}
-          className="w-full h-10 px-4 rounded-[10px] bg-[#F3E6D5] hover:bg-[#EAD8C3] text-[#1F040A] border border-[#E6D5C1] font-medium text-[13px] flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
-        >
-          <span className="material-symbols-outlined text-[18px] text-[#800020]">cloud_sync</span>
-          <span>
-            {isGoogleLoading ? 'Connecting...' : 'Sign in with Google / Cloud Vault'}
-          </span>
-        </button>
       </div>
     </div>
   );

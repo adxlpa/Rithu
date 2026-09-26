@@ -62,32 +62,12 @@ export default function App() {
   // Storage Initialization Flag
   const [isStorageReady, setIsStorageReady] = useState(false);
 
-  // Authentication State (Persisted in localStorage so GitHub Pages reloads keep Admin logged in)
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('rithu_admin_session');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return Boolean(parsed?.isLoggedIn);
-      }
-    } catch {
-      // Ignore storage error
-    }
-    return false;
-  });
+  // Authentication State: Driven strictly by Google Firebase Authentication
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => Boolean(auth.currentUser));
   const [isCloudSynced, setIsCloudSynced] = useState<boolean>(true);
-  const [adminUser, setAdminUser] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('rithu_admin_session');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.adminUser) return String(parsed.adminUser);
-      }
-    } catch {
-      // Ignore storage error
-    }
-    return 'Admin';
-  });
+  const [adminUser, setAdminUser] = useState<string>(() =>
+    auth.currentUser?.displayName || auth.currentUser?.email || 'Google Admin'
+  );
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
 
   // Audio Player State: Starts as null so "Now Playing" is NEVER shown on page load/refresh
@@ -110,6 +90,10 @@ export default function App() {
   // 1. Initial Load from Local Cache + Live Real-Time Cloud Firestore Subscription (No login needed for visitors)
   useEffect(() => {
     let isMounted = true;
+    let hasCloudAudioArrived = false;
+    let hasCloudVideoArrived = false;
+    let hasCloudMagazineArrived = false;
+
     async function initStorage() {
       try {
         const [loadedTracks, loadedVideos, loadedMag, loadedBoardImg] = await Promise.all([
@@ -119,10 +103,16 @@ export default function App() {
           loadPersistedEditorialBoardImage(),
         ]);
         if (isMounted) {
-          setAudioTracks(loadedTracks);
-          setVideoItems(loadedVideos);
-          setMagazinePages(loadedMag.pages);
-          setMagazineEdition(loadedMag.edition);
+          if (!hasCloudAudioArrived) {
+            setAudioTracks(loadedTracks);
+          }
+          if (!hasCloudVideoArrived) {
+            setVideoItems(loadedVideos);
+          }
+          if (!hasCloudMagazineArrived) {
+            setMagazinePages(loadedMag.pages);
+            setMagazineEdition(loadedMag.edition);
+          }
           if (loadedBoardImg) {
             setEditorialBoardImage(loadedBoardImg);
           }
@@ -139,16 +129,19 @@ export default function App() {
     const unsubscribeCloud = subscribeToCloudArchive({
       onAudioTracks: (cloudTracks) => {
         if (isMounted) {
+          hasCloudAudioArrived = true;
           setAudioTracks(cloudTracks);
         }
       },
       onVideoItems: (cloudVideos) => {
         if (isMounted) {
+          hasCloudVideoArrived = true;
           setVideoItems(cloudVideos);
         }
       },
       onMagazine: (cloudPages, cloudEdition) => {
         if (isMounted) {
+          hasCloudMagazineArrived = true;
           setMagazinePages(cloudPages);
           setMagazineEdition(cloudEdition);
         }
@@ -166,27 +159,29 @@ export default function App() {
     };
   }, []);
 
-  // 2. Listen to Firebase Auth state for optional Google Admin session
+  // 2. Listen to Firebase Auth state for Google Admin session
   useEffect(() => {
+    // Clear any legacy non-Google local session storage
+    try {
+      localStorage.removeItem('rithu_admin_session');
+    } catch {
+      // Ignore
+    }
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const displayLabel = user.displayName || user.email || 'Cloud Admin';
+        const displayLabel = user.displayName || user.email || 'Google Admin';
         setIsAdminLoggedIn(true);
         setIsCloudSynced(true);
         setAdminUser(displayLabel);
-        try {
-          localStorage.setItem(
-            'rithu_admin_session',
-            JSON.stringify({ isLoggedIn: true, adminUser: displayLabel })
-          );
-        } catch {
-          // Ignore storage error
-        }
         try {
           await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition);
         } catch (err) {
           console.warn('Initial cloud seed notice:', err);
         }
+      } else {
+        setIsAdminLoggedIn(false);
+        setAdminUser('');
       }
     });
     return () => unsubscribeAuth();
@@ -258,58 +253,35 @@ export default function App() {
     setIsAdminLoggedIn(true);
     setIsCloudSynced(true);
     setAdminUser(user);
-    try {
-      localStorage.setItem(
-        'rithu_admin_session',
-        JSON.stringify({ isLoggedIn: true, adminUser: user })
-      );
-    } catch {
-      // Ignore storage error
-    }
     setCurrentView('admin-portal');
     seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition).catch(() => {});
-    showToast(`Signed in as ${user}. Firebase Cloud Sync active for all devices.`);
+    showToast(`Signed in with Google as ${user}. Changes sync everywhere via Firebase.`);
   };
 
   const handleConnectCloudAdmin = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-      const label = user.displayName || user.email || 'Cloud Admin';
+      const label = user.displayName || user.email || 'Google Admin';
+      setIsAdminLoggedIn(true);
       setIsCloudSynced(true);
       setAdminUser(label);
-      try {
-        localStorage.setItem(
-          'rithu_admin_session',
-          JSON.stringify({ isLoggedIn: true, adminUser: label })
-        );
-      } catch {
-        // Ignore
-      }
       await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition);
-      showToast('Google Admin connected! All uploads sync across every device.');
+      showToast(`Google Admin (${label}) connected! All changes sync across every device.`);
     } catch {
-      setIsCloudSynced(true);
-      await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition).catch(() => {});
-      showToast('Firebase Editorial Cloud Vault active! All uploads sync across every device.');
+      showToast('Please complete Google sign-in to sync changes.');
     }
   };
 
   const handleSignOutAdmin = async () => {
-    try {
-      localStorage.removeItem('rithu_admin_session');
-    } catch {
-      // Ignore storage error
-    }
-    if (auth.currentUser) {
-      await signOut(auth).catch(() => {});
-    }
+    await signOut(auth).catch(() => {});
     setIsAdminLoggedIn(false);
+    setAdminUser('');
     if (window.location.hash === '#admin') {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
     setCurrentView('home');
-    showToast('Signed out of Admin Workspace.');
+    showToast('Signed out of Google Firebase Admin.');
   };
 
   // Magazine Handlers (Always stored in Firebase for everyone without login)

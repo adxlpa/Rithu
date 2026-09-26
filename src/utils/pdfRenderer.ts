@@ -44,12 +44,15 @@ export async function renderPdfToMagazinePages(
 
   for (let i = 1; i <= numPages; i++) {
     const page = await pdfDoc.getPage(i);
-    // Render at 1.4 scale for crisp visual fidelity while staying within cloud document limits
-    const viewport = page.getViewport({ scale: 1.4 });
+    // Normalize scale so max dimension is at most 1200px, keeping pages crisp and well within Firestore's 1MB document limit
+    const baseViewport = page.getViewport({ scale: 1 });
+    const maxDim = Math.max(baseViewport.width, baseViewport.height, 1);
+    const targetScale = Math.min(1.5, Math.max(0.8, 1200 / maxDim));
+    const viewport = page.getViewport({ scale: targetScale });
 
     const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
 
     const ctx = canvas.getContext('2d');
     if (!ctx) {
@@ -66,12 +69,15 @@ export async function renderPdfToMagazinePages(
       canvas,
     }).promise;
 
-    let dataUrl = canvas.toDataURL('image/jpeg', 0.84);
-    if (dataUrl.length > 750000) {
-      dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+    let dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+    if (dataUrl.length > 550000) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.68);
     }
-    if (dataUrl.length > 820000) {
-      dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+    if (dataUrl.length > 550000) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.52);
+    }
+    if (dataUrl.length > 550000) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.4);
     }
 
     const isFirst = i === 1;
@@ -79,7 +85,7 @@ export async function renderPdfToMagazinePages(
 
     pages.push({
       id: `pdf-page-${i}`,
-      pageNumber: i,
+      pageNumber: i - 1,
       type: isFirst ? 'cover' : isLast ? 'back-cover' : 'content',
       title: isFirst ? 'Cover' : isLast ? 'Back Cover' : `Page ${i}`,
       subtitle: `PDF Page ${i} of ${numPages}`,

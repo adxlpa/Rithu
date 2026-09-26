@@ -439,7 +439,6 @@ function buildAudioTrackPayload(track: AudioTrack, uid: string, isUpdate = false
   const validLanguages = ['Malayalam', 'English', 'Bilingual'];
 
   const payload: Record<string, unknown> = {
-    id: docId,
     title: clampStr(track.title, 200, 'Untitled Audio'),
     author: clampStr(track.author, 120, 'Editorial Contributor'),
     category: validCategories.includes(track.category) ? track.category : 'Editorial',
@@ -449,12 +448,13 @@ function buildAudioTrackPayload(track: AudioTrack, uid: string, isUpdate = false
     publishedDate: clampStr(track.publishedDate, 50, 'Feb 2026'),
     description: clampStr(track.description, 2000, 'Archived audio piece from the Munnar Sound Archives.'),
     isPublic: true,
-    createdByUid: sanitizeDocId(track.createdByUid || uid),
     editorialKey: EDITORIAL_KEY,
     updatedAt: serverTimestamp(),
   };
 
   if (!isUpdate) {
+    payload.id = docId;
+    payload.createdByUid = sanitizeDocId(uid);
     payload.createdAt = serverTimestamp();
   }
   if (track.englishSubtitle && track.englishSubtitle.trim()) {
@@ -477,7 +477,6 @@ function buildVideoItemPayload(video: VideoItem, uid: string, isUpdate = false) 
     'https://lh3.googleusercontent.com/aida-public/AB6AXuB-gJYBvMzQrXPTgT-D-NcHUXXRAfbO4h50BvYxfVaKnxISA54fnLU65JKY-M7i8O6k4NVB5GN68Ue0-RdGzI6jd3Os8YoTI5vjtfQKAq7FZOGfdVYApQxl1zk1xc0LlNtRskp5NcrWyW0IXrfMh6Nv1tr70vS8kpK2csYdYped1QYazKl8mBJq3zZ9QpgnXV-V0MGT5lF22bbgVqIGL9YMxAzJEduT5fok0v5meB7NJrXTbOh3bC2z';
 
   const payload: Record<string, unknown> = {
-    id: docId,
     title: clampStr(video.title, 200, 'Untitled Video'),
     dateStr: clampStr(video.dateStr, 50, 'Feb 2026'),
     category: validCategories.includes(video.category) ? video.category : 'Events',
@@ -486,12 +485,13 @@ function buildVideoItemPayload(video: VideoItem, uid: string, isUpdate = false) 
     image: video.image && video.image.length <= 700000 ? video.image.trim() : defaultPoster,
     imageAlt: clampStr(video.imageAlt || video.title, 200, 'Video Poster'),
     isPublic: true,
-    createdByUid: sanitizeDocId(video.createdByUid || uid),
     editorialKey: EDITORIAL_KEY,
     updatedAt: serverTimestamp(),
   };
 
   if (!isUpdate) {
+    payload.id = docId;
+    payload.createdByUid = sanitizeDocId(uid);
     payload.createdAt = serverTimestamp();
   }
   if (typeof video.isFeatured === 'boolean') {
@@ -711,6 +711,9 @@ export async function seedInitialCloudDataIfNeeded(
   currentVideos: VideoItem[],
   currentEdition: MagazineEditionInfo
 ): Promise<void> {
+  if (!auth.currentUser) {
+    return;
+  }
   const creatorUid = getActiveCreatorUid();
 
   try {
@@ -859,28 +862,31 @@ export async function saveCloudMagazineEditionAndPages(
       await delBatch.commit();
     }
 
-    // 2. Write or replace magazine_edition/current
+    // 2. Write or replace magazine_edition/current so relational check exists() passes on magazine_pages creation
     const editionDocRef = doc(db, 'magazine_edition', 'current');
     await deleteDoc(editionDocRef).catch(() => {});
 
-    const editionPayload: Record<string, unknown> = {
-      id: 'current',
-      title: clampStr(edition.title, 200, 'Rithu 2026'),
-      year: clampStr(edition.year, 20, '2026'),
-      institution: clampStr(edition.institution, 200, 'College of Engineering Munnar'),
-      totalPages: Math.max(1, Math.min(200, pages.length)),
-      sourceType: edition.sourceType === 'pdf' ? 'pdf' : 'curated',
-      isPublic: true,
-      createdByUid: creatorUid,
-      editorialKey: EDITORIAL_KEY,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    const buildEditionPayload = () => {
+      const p: Record<string, unknown> = {
+        id: 'current',
+        title: clampStr(edition.title, 200, 'Rithu 2026'),
+        year: clampStr(edition.year, 20, '2026'),
+        institution: clampStr(edition.institution, 200, 'College of Engineering Munnar'),
+        totalPages: Math.max(1, Math.min(500, pages.length)),
+        sourceType: edition.sourceType === 'pdf' ? 'pdf' : 'curated',
+        isPublic: true,
+        createdByUid: creatorUid,
+        editorialKey: EDITORIAL_KEY,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      if (edition.fileName && edition.fileName.trim()) {
+        p.fileName = clampStr(edition.fileName, 255);
+      }
+      return p;
     };
-    if (edition.fileName && edition.fileName.trim()) {
-      editionPayload.fileName = clampStr(edition.fileName, 255);
-    }
 
-    await setDoc(editionDocRef, editionPayload);
+    await setDoc(editionDocRef, buildEditionPayload());
 
     // 3. Write each rendered PDF page as its own document in magazine_pages
     if (edition.sourceType === 'pdf') {
@@ -891,7 +897,7 @@ export async function saveCloudMagazineEditionAndPages(
         const pagePayload = {
           id: pageDocId,
           editionId: 'current',
-          pageNumber: Math.max(0, Math.min(200, i)),
+          pageNumber: Math.max(0, Math.min(500, i)),
           type: validTypes.includes(page.type) ? page.type : 'content',
           title: clampStr(page.title, 200, `Page ${i + 1}`),
           subtitle: clampStr(page.subtitle, 200, `PDF Page ${i + 1} of ${pages.length}`),
