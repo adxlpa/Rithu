@@ -8,7 +8,11 @@ interface AdminViewProps {
   videoItems: VideoItem[];
   magazinePages: MagazinePage[];
   magazineEdition: MagazineEditionInfo;
-  onUpdateMagazinePages: (pages: MagazinePage[], info: MagazineEditionInfo) => Promise<void> | void;
+  onUpdateMagazinePages: (
+    pages: MagazinePage[],
+    info: MagazineEditionInfo,
+    onProgress?: (percent: number) => void
+  ) => Promise<void> | void;
   onResetMagazinePages: () => Promise<void> | void;
   onAddAudioTrack: (track: AudioTrack) => Promise<void> | void;
   onUpdateAudioTrack: (track: AudioTrack) => Promise<void> | void;
@@ -53,6 +57,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   // PDF Magazine State
   const [isRenderingPdf, setIsRenderingPdf] = useState(false);
   const [renderProgress, setRenderProgress] = useState<PdfRenderProgress | null>(null);
+  const [pdfCloudUploadPercent, setPdfCloudUploadPercent] = useState<number | null>(null);
   const [pdfCustomTitle, setPdfCustomTitle] = useState('');
   const [pdfEditionYear, setPdfEditionYear] = useState('2026');
 
@@ -171,6 +176,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       const file = e.target.files[0];
       try {
         setIsRenderingPdf(true);
+        setPdfCloudUploadPercent(null);
         setRenderProgress({ currentPage: 0, totalPages: 0, percent: 0 });
         const renderedPages = await renderPdfToMagazinePages(file, (p) => setRenderProgress(p));
         const info: MagazineEditionInfo = {
@@ -182,13 +188,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
           fileName: file.name,
           updatedAt: 'Synced via Firebase',
         };
-        await onUpdateMagazinePages(renderedPages, info);
+        setPdfCloudUploadPercent(0);
+        await onUpdateMagazinePages(renderedPages, info, (pct) => setPdfCloudUploadPercent(pct));
         setIsRenderingPdf(false);
         setRenderProgress(null);
+        setPdfCloudUploadPercent(null);
         showToast(`Uploaded "${file.name}" (${renderedPages.length} pages) to Firebase for all visitors!`);
       } catch (err: unknown) {
         setIsRenderingPdf(false);
         setRenderProgress(null);
+        setPdfCloudUploadPercent(null);
         const errorMsg = err instanceof Error ? err.message : 'Could not process PDF';
         showToast(`PDF error: ${errorMsg}`);
       }
@@ -197,6 +206,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   const handleLoadSamplePdf = async () => {
     setIsRenderingPdf(true);
+    setPdfCloudUploadPercent(0);
     try {
       const samplePages = generateSamplePdfMagazine();
       const info: MagazineEditionInfo = {
@@ -208,16 +218,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
         fileName: 'Rithu_2026_Archival_Issue.pdf',
         updatedAt: 'Synced via Firebase',
       };
-      await onUpdateMagazinePages(samplePages, info);
+      await onUpdateMagazinePages(samplePages, info, (pct) => setPdfCloudUploadPercent(pct));
       showToast(`Published Sample PDF Issue (${samplePages.length} pages) to Firebase!`);
     } finally {
       setIsRenderingPdf(false);
+      setPdfCloudUploadPercent(null);
     }
   };
 
   const handleResetToCurated = async () => {
     await onResetMagazinePages();
-    showToast('Restored original 16-page editorial magazine issue across all devices.');
+    showToast('Deleted uploaded PDF and restored default magazine issue for all visitors.');
   };
 
   // Submit Audio Handler (Uploads Audio File to Firebase if selected)
@@ -595,10 +606,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <button
                         type="button"
                         onClick={handleResetToCurated}
-                        className="px-3 py-1.5 rounded-lg border border-[#E6D5C1] bg-[#FFF9F2] text-[13px] font-medium text-[#5C3A42] hover:text-[#1F040A] hover:bg-[#F3E6D5] transition-colors cursor-pointer whitespace-nowrap"
-                        title="Reset to 16-page curated editorial issue"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#800020]/40 bg-[#FFF9F2] text-[13px] font-semibold text-[#800020] hover:bg-[#800020] hover:text-[#FFF9F2] transition-colors cursor-pointer whitespace-nowrap"
+                        title="Delete uploaded PDF from Firebase and restore default magazine"
                       >
-                        Reset to Curated Issue
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                        <span>Delete Uploaded PDF</span>
                       </button>
                     )}
                     <button
@@ -671,15 +683,25 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         <div className="w-full max-w-[360px] flex flex-col items-center gap-3">
                           <div className="w-10 h-10 border-3 border-[#800020] border-t-transparent rounded-full animate-spin"></div>
                           <span className="text-[14px] font-semibold text-[#1F040A]">
-                            Rendering & Uploading PDF Pages ({renderProgress?.percent || 0}%)
+                            {pdfCloudUploadPercent !== null
+                              ? `Syncing PDF to Firebase Cloud (${pdfCloudUploadPercent}%)`
+                              : `Rendering PDF Pages (${renderProgress?.percent || 0}%)`}
                           </span>
                           <span className="text-[12px] text-[#5C3A42] text-center">
-                            Processing page {renderProgress?.currentPage || 0} of {renderProgress?.totalPages || 0} into Firebase spreads...
+                            {pdfCloudUploadPercent !== null
+                              ? 'Publishing pages to Firebase so all visitors see the new PDF without login...'
+                              : `Processing page ${renderProgress?.currentPage || 0} of ${renderProgress?.totalPages || 0}...`}
                           </span>
                           <div className="w-full bg-[#F3E6D5] h-2 rounded-full overflow-hidden border border-[#E6D5C1]">
                             <div
                               className="bg-[#800020] h-full transition-all duration-150"
-                              style={{ width: `${renderProgress?.percent || 0}%` }}
+                              style={{
+                                width: `${
+                                  pdfCloudUploadPercent !== null
+                                    ? pdfCloudUploadPercent
+                                    : renderProgress?.percent || 0
+                                }%`,
+                              }}
                             ></div>
                           </div>
                         </div>

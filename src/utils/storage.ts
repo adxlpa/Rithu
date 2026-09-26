@@ -522,6 +522,8 @@ export function subscribeToCloudArchive(callbacks: {
 }): () => void {
   let latestEdition: MagazineEditionInfo | null = null;
   let latestPdfPages: MagazinePage[] = [];
+  let latestAudioTracks: AudioTrack[] | null = null;
+  let latestVideoItems: VideoItem[] | null = null;
   let isCloudInitialized = false;
 
   const emitMagazineIfReady = () => {
@@ -536,7 +538,23 @@ export function subscribeToCloudArchive(callbacks: {
     }
   };
 
-  // Ensure cloud archive is seeded on first run
+  const emitAudioIfReady = () => {
+    if (latestAudioTracks === null) return;
+    if (latestAudioTracks.length > 0 || isCloudInitialized) {
+      callbacks.onAudioTracks(latestAudioTracks);
+      savePersistedAudioTracks(latestAudioTracks);
+    }
+  };
+
+  const emitVideoIfReady = () => {
+    if (latestVideoItems === null) return;
+    if (latestVideoItems.length > 0 || isCloudInitialized) {
+      callbacks.onVideoItems(latestVideoItems);
+      savePersistedVideoItems(latestVideoItems);
+    }
+  };
+
+  // Ensure cloud archive is seeded on first run, then flush any pending snapshots (including empty states after admin deletions)
   seedInitialCloudDataIfNeeded(
     INITIAL_AUDIO_TRACKS,
     INITIAL_VIDEOS,
@@ -544,8 +562,16 @@ export function subscribeToCloudArchive(callbacks: {
   )
     .then(() => {
       isCloudInitialized = true;
+      emitAudioIfReady();
+      emitVideoIfReady();
+      emitMagazineIfReady();
     })
-    .catch(() => {});
+    .catch(() => {
+      isCloudInitialized = true;
+      emitAudioIfReady();
+      emitVideoIfReady();
+      emitMagazineIfReady();
+    });
 
   // 1. Magazine Edition Listener
   const editionQuery = query(collection(db, 'magazine_edition'), where('isPublic', '==', true));
@@ -566,6 +592,8 @@ export function subscribeToCloudArchive(callbacks: {
           updatedAt: 'Synced via Cloud',
         };
         emitMagazineIfReady();
+        emitAudioIfReady();
+        emitVideoIfReady();
       }
     },
     (error) => {
@@ -578,28 +606,25 @@ export function subscribeToCloudArchive(callbacks: {
   const unsubAudio = onSnapshot(
     audioQuery,
     (snapshot) => {
-      if (!snapshot.empty || isCloudInitialized) {
-        const tracks: AudioTrack[] = snapshot.docs.map((docSnap) => {
-          const d = docSnap.data();
-          return {
-            id: d.id,
-            title: d.title,
-            englishSubtitle: d.englishSubtitle,
-            author: d.author,
-            category: d.category,
-            language: d.language,
-            duration: d.duration,
-            durationSeconds: d.durationSeconds,
-            publishedDate: d.publishedDate,
-            description: d.description,
-            coverImage: d.coverImage,
-            audioUrl: d.audioUrl,
-            createdByUid: d.createdByUid,
-          };
-        });
-        callbacks.onAudioTracks(tracks);
-        savePersistedAudioTracks(tracks);
-      }
+      latestAudioTracks = snapshot.docs.map((docSnap) => {
+        const d = docSnap.data();
+        return {
+          id: d.id,
+          title: d.title,
+          englishSubtitle: d.englishSubtitle,
+          author: d.author,
+          category: d.category,
+          language: d.language,
+          duration: d.duration,
+          durationSeconds: d.durationSeconds,
+          publishedDate: d.publishedDate,
+          description: d.description,
+          coverImage: d.coverImage,
+          audioUrl: d.audioUrl,
+          createdByUid: d.createdByUid,
+        };
+      });
+      emitAudioIfReady();
     },
     (error) => {
       handleFirestoreError(error, OperationType.LIST, 'audio_tracks');
@@ -611,28 +636,25 @@ export function subscribeToCloudArchive(callbacks: {
   const unsubVideo = onSnapshot(
     videoQuery,
     (snapshot) => {
-      if (!snapshot.empty || isCloudInitialized) {
-        const videos: VideoItem[] = snapshot.docs.map((docSnap) => {
-          const d = docSnap.data();
-          return {
-            id: d.id,
-            title: d.title,
-            dateStr: d.dateStr,
-            category: d.category,
-            duration: d.duration,
-            durationSeconds: d.durationSeconds,
-            image: d.image,
-            imageAlt: d.imageAlt,
-            isFeatured: d.isFeatured,
-            tagline: d.tagline,
-            description: d.description,
-            videoUrl: d.videoUrl,
-            createdByUid: d.createdByUid,
-          };
-        });
-        callbacks.onVideoItems(videos);
-        savePersistedVideoItems(videos);
-      }
+      latestVideoItems = snapshot.docs.map((docSnap) => {
+        const d = docSnap.data();
+        return {
+          id: d.id,
+          title: d.title,
+          dateStr: d.dateStr,
+          category: d.category,
+          duration: d.duration,
+          durationSeconds: d.durationSeconds,
+          image: d.image,
+          imageAlt: d.imageAlt,
+          isFeatured: d.isFeatured,
+          tagline: d.tagline,
+          description: d.description,
+          videoUrl: d.videoUrl,
+          createdByUid: d.createdByUid,
+        };
+      });
+      emitVideoIfReady();
     },
     (error) => {
       handleFirestoreError(error, OperationType.LIST, 'video_items');
@@ -793,9 +815,28 @@ export async function updateCloudAudioTrack(track: AudioTrack): Promise<void> {
   }
 }
 
-export async function deleteCloudAudioTrack(id: string, audioUrl?: string): Promise<void> {
+export async function deleteCloudAudioTrack(
+  id: string,
+  audioUrl?: string,
+  remainingTracks?: AudioTrack[]
+): Promise<void> {
   const docId = sanitizeDocId(id);
+  const creatorUid = getActiveCreatorUid();
   try {
+    // If remainingTracks are provided and Firestore was never seeded with them yet, ensure remaining tracks exist in Firestore
+    if (remainingTracks) {
+      const existingSnap = await getDocs(
+        query(collection(db, 'audio_tracks'), where('isPublic', '==', true))
+      );
+      if (existingSnap.empty && remainingTracks.length > 0) {
+        const batch = writeBatch(db);
+        for (const t of remainingTracks) {
+          const { docId: rId, payload } = buildAudioTrackPayload(t, creatorUid, false);
+          batch.set(doc(db, 'audio_tracks', rId), payload);
+        }
+        await batch.commit();
+      }
+    }
     await deleteDoc(doc(db, 'audio_tracks', docId));
     await deleteMediaChunksIfPresent(audioUrl);
   } catch (error) {
@@ -829,9 +870,27 @@ export async function updateCloudVideoItem(video: VideoItem): Promise<void> {
   }
 }
 
-export async function deleteCloudVideoItem(id: string, videoUrl?: string): Promise<void> {
+export async function deleteCloudVideoItem(
+  id: string,
+  videoUrl?: string,
+  remainingVideos?: VideoItem[]
+): Promise<void> {
   const docId = sanitizeDocId(id);
+  const creatorUid = getActiveCreatorUid();
   try {
+    if (remainingVideos) {
+      const existingSnap = await getDocs(
+        query(collection(db, 'video_items'), where('isPublic', '==', true))
+      );
+      if (existingSnap.empty && remainingVideos.length > 0) {
+        const batch = writeBatch(db);
+        for (const v of remainingVideos) {
+          const { docId: rId, payload } = buildVideoItemPayload(v, creatorUid, false);
+          batch.set(doc(db, 'video_items', rId), payload);
+        }
+        await batch.commit();
+      }
+    }
     await deleteDoc(doc(db, 'video_items', docId));
     await deleteMediaChunksIfPresent(videoUrl);
   } catch (error) {
@@ -859,7 +918,7 @@ export async function saveCloudMagazineEditionAndPages(
       await delBatch.commit();
     }
 
-    // 2. Write or replace magazine_edition/current so relational check exists() passes on magazine_pages creation
+    // 2. Write magazine_edition/current so relational check exists() passes on magazine_pages creation
     const editionDocRef = doc(db, 'magazine_edition', 'current');
     await deleteDoc(editionDocRef).catch(() => {});
 
@@ -885,29 +944,40 @@ export async function saveCloudMagazineEditionAndPages(
 
     await setDoc(editionDocRef, buildEditionPayload());
 
-    // 3. Write each rendered PDF page as its own document in magazine_pages
+    // 3. Upload rendered PDF pages in fast parallel batches of 4 so large PDFs sync quickly
     if (edition.sourceType === 'pdf') {
-      for (let i = 0; i < pages.length; i++) {
-        const page = pages[i];
-        const pageDocId = sanitizeDocId(`page-${i + 1}`);
-        const validTypes = ['cover', 'content', 'back-cover'];
-        const pagePayload = {
-          id: pageDocId,
-          editionId: 'current',
-          pageNumber: Math.max(0, Math.min(500, i)),
-          type: validTypes.includes(page.type) ? page.type : 'content',
-          title: clampStr(page.title, 200, `Page ${i + 1}`),
-          subtitle: clampStr(page.subtitle, 200, `PDF Page ${i + 1} of ${pages.length}`),
-          pdfImageUrl: clampStr(page.pdfImageUrl, 850000, 'https://via.placeholder.com/600x800'),
-          isPublic: true,
-          createdByUid: creatorUid,
-          editorialKey: EDITORIAL_KEY,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-        await setDoc(doc(db, 'magazine_pages', pageDocId), pagePayload);
+      const concurrency = 4;
+      for (let start = 0; start < pages.length; start += concurrency) {
+        const slice = pages.slice(start, start + concurrency);
+        await Promise.all(
+          slice.map(async (page, offset) => {
+            const i = start + offset;
+            const pageDocId = sanitizeDocId(`page-${i + 1}`);
+            const validTypes = ['cover', 'content', 'back-cover'];
+            const pagePayload = {
+              id: pageDocId,
+              editionId: 'current',
+              pageNumber: Math.max(0, Math.min(500, i)),
+              type: validTypes.includes(page.type) ? page.type : 'content',
+              title: clampStr(page.title, 200, `Page ${i + 1}`),
+              subtitle: clampStr(page.subtitle, 200, `PDF Page ${i + 1} of ${pages.length}`),
+              pdfImageUrl: clampStr(
+                page.pdfImageUrl,
+                850000,
+                'https://via.placeholder.com/600x800'
+              ),
+              isPublic: true,
+              createdByUid: creatorUid,
+              editorialKey: EDITORIAL_KEY,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            };
+            await setDoc(doc(db, 'magazine_pages', pageDocId), pagePayload);
+          })
+        );
         if (onProgress) {
-          onProgress(Math.round(((i + 1) / pages.length) * 100));
+          const completed = Math.min(pages.length, start + slice.length);
+          onProgress(Math.round((completed / pages.length) * 100));
         }
       }
     }

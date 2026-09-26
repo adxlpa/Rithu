@@ -47,19 +47,7 @@ service cloud.firestore {
     }
 
     function hasEditorialDeleteAuth() {
-      return isAdmin() || (
-        'editorialKey' in existing() &&
-        existing().editorialKey is string &&
-        existing().editorialKey.size() >= 1 &&
-        existing().editorialKey.size() <= 64 &&
-        existing().editorialKey == 'rithu2026-cem-vault'
-      ) || (
-        !('editorialKey' in existing()) &&
-        existing().isPublic == true &&
-        existing().createdByUid is string &&
-        existing().createdByUid.size() >= 1 &&
-        existing().createdByUid.size() <= 128
-      );
+      return isAdmin() || existing().isPublic == true;
     }
 
     function isValidCreatorUidFormat(uid) {

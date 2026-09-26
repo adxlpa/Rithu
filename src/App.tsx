@@ -335,13 +335,17 @@ export default function App() {
   };
 
   // Magazine Handlers (Always stored in Firebase for everyone without login)
-  const handleUpdateMagazinePages = async (newPages: MagazinePage[], newInfo: MagazineEditionInfo) => {
+  const handleUpdateMagazinePages = async (
+    newPages: MagazinePage[],
+    newInfo: MagazineEditionInfo,
+    onProgress?: (percent: number) => void
+  ) => {
     setMagazinePages(newPages);
     setMagazineEdition(newInfo);
     savePersistedMagazine(newPages, newInfo);
     try {
       showToast('Uploading magazine pages to Firebase for all visitors...');
-      await saveCloudMagazineEditionAndPages(newPages, newInfo);
+      await saveCloudMagazineEditionAndPages(newPages, newInfo, onProgress);
       showToast('Magazine synced to Firebase! Live for everyone across all devices.');
     } catch (err) {
       console.error('Cloud magazine sync failed:', err);
@@ -355,7 +359,7 @@ export default function App() {
     setMagazineEdition(INITIAL_MAGAZINE_EDITION);
     try {
       await resetCloudMagazineToCurated();
-      showToast('Magazine restored to official default edition across all devices.');
+      showToast('Uploaded PDF deleted & default magazine restored across all devices.');
     } catch (err) {
       console.error('Cloud magazine reset failed:', err);
       showToast('Magazine restored locally.');
@@ -406,18 +410,16 @@ export default function App() {
 
   const handleDeleteAudioTrack = async (id: string) => {
     const target = audioTracks.find((t) => t.id === id);
-    setAudioTracks((prev) => {
-      const next = prev.filter((t) => t.id !== id);
-      savePersistedAudioTracks(next);
-      return next;
-    });
+    const remaining = audioTracks.filter((t) => t.id !== id);
+    setAudioTracks(remaining);
+    savePersistedAudioTracks(remaining);
     if (currentTrack?.id === id) {
       setIsPlayingAudio(false);
       setCurrentTrack(null);
     }
     try {
-      await deleteCloudAudioTrack(id, target?.audioUrl);
-      showToast('Audio track permanently removed from Firebase across all devices.');
+      await deleteCloudAudioTrack(id, target?.audioUrl, remaining);
+      showToast('Audio track permanently deleted from Firebase for all visitors.');
     } catch (err) {
       console.error('Cloud audio delete failed:', err);
       showToast('Audio track removed locally.');
@@ -465,14 +467,12 @@ export default function App() {
 
   const handleDeleteVideoItem = async (id: string) => {
     const target = videoItems.find((v) => v.id === id);
-    setVideoItems((prev) => {
-      const next = prev.filter((v) => v.id !== id);
-      savePersistedVideoItems(next);
-      return next;
-    });
+    const remaining = videoItems.filter((v) => v.id !== id);
+    setVideoItems(remaining);
+    savePersistedVideoItems(remaining);
     try {
-      await deleteCloudVideoItem(id, target?.videoUrl);
-      showToast('Video record permanently removed from Firebase across all devices.');
+      await deleteCloudVideoItem(id, target?.videoUrl, remaining);
+      showToast('Video permanently deleted from Firebase for all visitors.');
     } catch (err) {
       console.error('Cloud video delete failed:', err);
       showToast('Video record removed locally.');
