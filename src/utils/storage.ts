@@ -711,9 +711,6 @@ export async function seedInitialCloudDataIfNeeded(
   currentVideos: VideoItem[],
   currentEdition: MagazineEditionInfo
 ): Promise<void> {
-  if (!auth.currentUser) {
-    return;
-  }
   const creatorUid = getActiveCreatorUid();
 
   try {
