@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { AudioTrack } from '../types';
 import { soundscape } from '../utils/audioEngine';
+import { resolveMediaUrlFromFirebase } from '../utils/storage';
 
 interface FloatingAudioPlayerProps {
   currentTrack: AudioTrack | null;
@@ -16,12 +17,17 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
   onTogglePlay,
   onClose,
 }) => {
-  const [currentSeconds, setCurrentSeconds] = useState(102);
+  const [currentSeconds, setCurrentSeconds] = useState(0);
+  const [realDuration, setRealDuration] = useState<number | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<string>('1×');
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [resolvedAudioSrc, setResolvedAudioSrc] = useState<string | null>(null);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+
   const scrubberRef = useRef<HTMLDivElement>(null);
+  const htmlAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const speedMultipliers: Record<string, number> = {
     '1×': 1,
@@ -30,13 +36,68 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
     '2×': 2,
   };
 
-  const totalSeconds = currentTrack ? currentTrack.durationSeconds : 190;
-  const progressPercent = Math.min(100, Math.max(0, (currentSeconds / totalSeconds) * 100));
+  const totalSeconds = realDuration || (currentTrack ? currentTrack.durationSeconds : 190);
+  const progressPercent = Math.min(100, Math.max(0, (currentSeconds / (totalSeconds || 1)) * 100));
 
+  // Resolve uploaded audio from Firebase chunks or URL when track changes
   useEffect(() => {
+    let active = true;
+    setCurrentSeconds(0);
+    setRealDuration(null);
+    soundscape.stop();
+
+    if (currentTrack?.audioUrl) {
+      setIsLoadingAudio(true);
+      resolveMediaUrlFromFirebase(currentTrack.audioUrl)
+        .then((url) => {
+          if (active) {
+            setResolvedAudioSrc(url);
+            setIsLoadingAudio(false);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setResolvedAudioSrc(null);
+            setIsLoadingAudio(false);
+          }
+        });
+    } else {
+      setResolvedAudioSrc(null);
+      setIsLoadingAudio(false);
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [currentTrack?.id, currentTrack?.audioUrl]);
+
+  // Control HTML5 <audio> element when resolvedAudioSrc is available
+  useEffect(() => {
+    const audioEl = htmlAudioRef.current;
+    if (!audioEl || !resolvedAudioSrc) return;
+
+    soundscape.stop();
+    audioEl.playbackRate = speedMultipliers[playbackSpeed] || 1;
+    audioEl.volume = isMuted ? 0 : volume;
+    audioEl.muted = isMuted;
+
+    if (isPlaying) {
+      audioEl.play().catch(() => {});
+    } else {
+      audioEl.pause();
+    }
+  }, [isPlaying, resolvedAudioSrc, playbackSpeed, volume, isMuted]);
+
+  // Fallback synthetic soundscape when no uploaded audio file is attached
+  useEffect(() => {
+    if (resolvedAudioSrc || isLoadingAudio || !currentTrack) {
+      soundscape.stop();
+      return;
+    }
+
     let interval: NodeJS.Timeout | null = null;
     if (isPlaying) {
-      soundscape.play(currentTrack?.category || 'General');
+      soundscape.play(currentTrack.category || 'General');
       const multiplier = speedMultipliers[playbackSpeed] || 1;
       interval = setInterval(() => {
         setCurrentSeconds((prev) => {
@@ -53,17 +114,7 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isPlaying, playbackSpeed, totalSeconds, currentTrack]);
-
-  useEffect(() => {
-    if (currentTrack) {
-      if (currentTrack.id === '2') {
-        setCurrentSeconds(102);
-      } else {
-        setCurrentSeconds(0);
-      }
-    }
-  }, [currentTrack?.id]);
+  }, [isPlaying, playbackSpeed, totalSeconds, currentTrack, resolvedAudioSrc, isLoadingAudio]);
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -76,7 +127,11 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
     const rect = scrubberRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const pct = Math.max(0, Math.min(1, clickX / rect.width));
-    setCurrentSeconds(Math.floor(pct * totalSeconds));
+    const targetSec = Math.floor(pct * totalSeconds);
+    setCurrentSeconds(targetSec);
+    if (htmlAudioRef.current && resolvedAudioSrc) {
+      htmlAudioRef.current.currentTime = targetSec;
+    }
   };
 
   const toggleSpeed = () => {
@@ -88,14 +143,23 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
   const toggleVolumeMute = () => {
     const muted = soundscape.toggleMute();
     setIsMuted(muted);
+    if (htmlAudioRef.current) {
+      htmlAudioRef.current.muted = muted;
+    }
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
     setVolume(val);
     soundscape.setVolume(val);
+    if (htmlAudioRef.current) {
+      htmlAudioRef.current.volume = val;
+    }
     if (isMuted && val > 0) {
       setIsMuted(false);
+      if (htmlAudioRef.current) {
+        htmlAudioRef.current.muted = false;
+      }
     }
   };
 
@@ -106,30 +170,58 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
       aria-label="Audio player"
       className="fixed bottom-4 left-4 right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-300"
     >
-      <div className="pointer-events-auto w-full max-w-[720px] rounded-[24px] backdrop-blur-[20px] bg-[#800020]/95 border border-[#F3E6D5]/25 shadow-[0_15px_40px_rgba(128,0,32,0.5)] px-5 py-3 sm:px-6 flex flex-col gap-2 transition-all text-[#FFF9F2]">
+      {resolvedAudioSrc && (
+        <audio
+          ref={htmlAudioRef}
+          src={resolvedAudioSrc}
+          onTimeUpdate={(e) => setCurrentSeconds(Math.floor(e.currentTarget.currentTime))}
+          onLoadedMetadata={(e) => {
+            if (e.currentTarget.duration && isFinite(e.currentTarget.duration)) {
+              setRealDuration(Math.round(e.currentTarget.duration));
+            }
+          }}
+          onEnded={() => {
+            setCurrentSeconds(0);
+            onTogglePlay();
+          }}
+        />
+      )}
+
+      <div className="pointer-events-auto w-full max-w-[720px] rounded-[20px] backdrop-blur-[20px] bg-[#FFF9F2]/95 border border-[#800020]/20 shadow-[0_12px_36px_rgba(31,4,10,0.16)] px-5 py-3 sm:px-6 flex flex-col gap-2 transition-all text-[#1F040A]">
         {/* Top Line Controls & Info */}
         <div className="flex items-center justify-between gap-3">
           {/* Left: Play/Pause and Title */}
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <button
               onClick={onTogglePlay}
+              disabled={isLoadingAudio}
               aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
-              className="w-9 h-9 rounded-full bg-[#D45060] text-white hover:bg-[#b83848] flex items-center justify-center flex-shrink-0 transition-transform active:scale-95 shadow-md cursor-pointer"
+              className="w-9 h-9 rounded-full bg-[#800020] text-[#FFF9F2] hover:bg-[#660019] flex items-center justify-center flex-shrink-0 transition-transform active:scale-95 shadow-sm cursor-pointer disabled:opacity-50"
             >
-              <span className="material-symbols-outlined text-[20px] leading-none">
-                {isPlaying ? 'pause' : 'play_arrow'}
-              </span>
+              {isLoadingAudio ? (
+                <span className="w-4 h-4 border-2 border-[#FFF9F2] border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <span className="material-symbols-outlined text-[20px] leading-none">
+                  {isPlaying ? 'pause' : 'play_arrow'}
+                </span>
+              )}
             </button>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 text-xs text-[#F3E6D5] font-semibold uppercase tracking-wider">
+              <div className="flex items-center gap-1.5 text-[11px] text-[#800020] font-semibold tracking-wider uppercase">
                 <span
                   className={`w-1.5 h-1.5 rounded-full bg-[#D45060] ${
                     isPlaying ? 'animate-pulse' : 'opacity-40'
                   }`}
                 />
-                <span>{isPlaying ? 'Now Playing' : 'Paused'}</span>
+                <span>
+                  {isLoadingAudio
+                    ? 'Loading Cloud Audio...'
+                    : isPlaying
+                    ? 'Now Playing'
+                    : 'Paused'}
+                </span>
               </div>
-              <div className="text-[14px] leading-5 font-semibold text-[#FFF9F2] truncate leading-tight">
+              <div className="text-[14px] leading-5 font-semibold text-[#1F040A] truncate">
                 {currentTrack.title}
               </div>
             </div>
@@ -137,14 +229,14 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
 
           {/* Right: Speed, Volume, Time, and Close Button */}
           <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0 relative">
-            <span className="text-[12px] text-[#F3E6D5]/80 font-medium tabular-nums hidden xs:inline">
-              {formatTime(currentSeconds)} / {currentTrack.duration}
+            <span className="text-[12px] text-[#5C3A42] font-medium tabular-nums hidden xs:inline">
+              {formatTime(currentSeconds)} / {formatTime(totalSeconds)}
             </span>
 
             {/* Speed Toggle */}
             <button
               onClick={toggleSpeed}
-              className="text-[12px] font-semibold text-[#F3E6D5] hover:text-white px-2 py-0.5 rounded hover:bg-black/20 transition-colors cursor-pointer"
+              className="text-[12px] font-semibold text-[#800020] hover:text-[#1F040A] px-2 py-0.5 rounded hover:bg-[#F3E6D5] transition-colors cursor-pointer"
               title="Playback speed"
             >
               {playbackSpeed}
@@ -159,7 +251,7 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
               <button
                 onClick={toggleVolumeMute}
                 aria-label="Mute or adjust volume"
-                className="w-7 h-7 flex items-center justify-center text-[#F3E6D5] hover:text-white transition-colors cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center text-[#5C3A42] hover:text-[#800020] transition-colors cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[19px]">
                   {isMuted || volume === 0
@@ -171,7 +263,7 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
               </button>
 
               {showVolumeSlider && (
-                <div className="absolute bottom-8 right-0 bg-[#4D0013] border border-[#F3E6D5]/30 shadow-2xl p-2.5 rounded-lg flex items-center gap-2 w-28 z-50">
+                <div className="absolute bottom-8 right-0 bg-[#FFF9F2] border border-[#E6D5C1] shadow-xl p-2.5 rounded-lg flex items-center gap-2 w-28 z-50">
                   <input
                     type="range"
                     min="0"
@@ -179,7 +271,7 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
                     step="0.05"
                     value={isMuted ? 0 : volume}
                     onChange={handleVolumeChange}
-                    className="w-full h-1 accent-[#D45060] cursor-pointer"
+                    className="w-full h-1 accent-[#800020] cursor-pointer"
                   />
                 </div>
               )}
@@ -191,13 +283,18 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   soundscape.stop();
+                  if (htmlAudioRef.current) {
+                    htmlAudioRef.current.pause();
+                  }
                   onClose();
                 }}
                 aria-label="Close now playing bar"
-                className="w-8 h-8 rounded-full bg-[#4D0013]/70 hover:bg-[#D45060] flex items-center justify-center text-[#F3E6D5] hover:text-[#FFF9F2] transition-all cursor-pointer ml-1.5 border border-[#F3E6D5]/25 hover:border-white/50 shadow-sm group"
+                className="w-8 h-8 rounded-full bg-[#F3E6D5] hover:bg-[#800020] flex items-center justify-center text-[#1F040A] hover:text-[#FFF9F2] transition-all cursor-pointer ml-1 border border-[#800020]/20 shadow-xs group"
                 title="Close now playing bar"
               >
-                <span className="material-symbols-outlined text-[18px] group-hover:scale-110 transition-transform">close</span>
+                <span className="material-symbols-outlined text-[18px] group-hover:scale-110 transition-transform">
+                  close
+                </span>
               </button>
             )}
           </div>
@@ -214,9 +311,9 @@ export const FloatingAudioPlayer: React.FC<FloatingAudioPlayerProps> = ({
           aria-valuenow={Math.round(progressPercent)}
           className="w-full flex items-center gap-1 cursor-pointer group py-1"
         >
-          <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden relative group-hover:h-1.5 transition-all">
+          <div className="w-full h-1.5 bg-[#F3E6D5] rounded-full overflow-hidden relative group-hover:h-2 transition-all">
             <div
-              className="h-full bg-[#D45060] rounded-full transition-all duration-150"
+              className="h-full bg-[#800020] rounded-full transition-all duration-150"
               style={{ width: `${progressPercent}%` }}
             />
           </div>

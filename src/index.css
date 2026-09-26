@@ -16,30 +16,30 @@
   --color-on-secondary: #FFFFFF;
   --color-secondary-container: #2E000B;
 
-  --color-surface: #120306;
-  --color-surface-dim: #0B0103;
-  --color-surface-bright: #1D050B;
-  --color-surface-container: #180408;
-  --color-surface-container-high: #24070D;
-  --color-surface-container-highest: #330B14;
+  --color-surface: #FFF9F2;
+  --color-surface-dim: #F3E6D5;
+  --color-surface-bright: #FFFFFF;
+  --color-surface-container: #F8EFE4;
+  --color-surface-container-high: #F3E6D5;
+  --color-surface-container-highest: #EAD8C3;
 
-  --color-on-surface: #FFF9F2;
-  --color-on-surface-variant: #F3E6D5;
-  --color-outline: #521320;
-  --color-outline-variant: #3A0C16;
+  --color-on-surface: #1F040A;
+  --color-on-surface-variant: #5C3A42;
+  --color-outline: #D5C1AD;
+  --color-outline-variant: #E6D5C1;
 
-  --color-background: #0E0205;
-  --color-on-background: #FFF9F2;
+  --color-background: #FFF9F2;
+  --color-on-background: #1F040A;
 
-  --color-ink: #FFF9F2;
-  --color-ink-muted: #F3E6D5;
-  --color-accent: #D45060;
+  --color-ink: #1F040A;
+  --color-ink-muted: #5C3A42;
+  --color-accent: #800020;
 }
 
 @layer base {
   body {
-    background-color: #0E0205;
-    color: #FFF9F2;
+    background-color: #FFF9F2;
+    color: #1F040A;
     font-family: 'Inter', 'Noto Sans Malayalam', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
 }

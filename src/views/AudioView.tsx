@@ -14,7 +14,6 @@ export const AudioView: React.FC<AudioViewProps> = ({
   currentTrack,
   isPlaying,
   onSelectTrack,
-  onOpenSubmitModal,
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'malayalam' | 'english'>('all');
 
@@ -24,35 +23,35 @@ export const AudioView: React.FC<AudioViewProps> = ({
   });
 
   return (
-    <div className="w-full bg-[#0E0205] text-[#FFF9F2] pb-32 animate-fadeIn min-h-[calc(100vh-4rem)]">
+    <div className="w-full bg-[#FFF9F2] text-[#1F040A] pb-32 animate-fadeIn min-h-[calc(100vh-4rem)]">
       <div className="w-full max-w-[1120px] mx-auto px-4 sm:px-6 pb-20">
         {/* Hero Editorial Header */}
         <header className="pt-8 sm:pt-14 pb-8 sm:pb-10 max-w-2xl">
-          <div className="inline-flex items-center gap-1.5 text-[#D45060] mb-3">
+          <div className="inline-flex items-center gap-1.5 text-[#800020] mb-3">
             <span className="material-symbols-outlined text-[16px]">graphic_eq</span>
-            <span className="text-[12px] font-semibold uppercase tracking-widest text-[#D45060]">
-              Spoken Word & Soundscapes
+            <span className="text-[12px] font-semibold uppercase tracking-widest text-[#800020]">
+              VOICES FROM THE PAGES
             </span>
           </div>
-          <h1 className="text-[40px] sm:text-[56px] leading-[1.1] font-semibold text-[#FFF9F2] tracking-tight mb-3">
+          <h1 className="text-[40px] sm:text-[56px] leading-[1.1] font-semibold text-[#1F040A] tracking-tight mb-3 font-serif">
             Audio
           </h1>
-          <p className="text-[17px] leading-relaxed text-[#F3E6D5]/80">
-            Student voices, poetry, interviews, and spoken editorial from the hills of Munnar.
+          <p className="text-[17px] leading-relaxed text-[#5C3A42]">
+            Some stories are meant to be read. Others are meant to be heard. Listen to the voices behind the pages of Rithu.
           </p>
 
           {/* Filter Bar */}
           <nav
             aria-label="Audio filter"
-            className="flex items-center gap-3 mt-8 pt-2 text-[14px]"
+            className="flex items-center gap-2.5 mt-8 pt-2 text-[14px]"
           >
             <button
               type="button"
               onClick={() => setSelectedFilter('all')}
-              className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 selectedFilter === 'all'
                   ? 'bg-[#800020] text-[#FFF9F2] font-semibold shadow-sm'
-                  : 'bg-[#1F040A] text-[#F3E6D5]/80 hover:text-white font-medium border border-[#3A0C16]'
+                  : 'bg-[#F3E6D5] text-[#5C3A42] hover:text-[#1F040A] font-medium border border-[#E6D5C1]'
               }`}
             >
               <span>All</span>
@@ -60,10 +59,10 @@ export const AudioView: React.FC<AudioViewProps> = ({
             <button
               type="button"
               onClick={() => setSelectedFilter('malayalam')}
-              className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 selectedFilter === 'malayalam'
                   ? 'bg-[#800020] text-[#FFF9F2] font-semibold shadow-sm'
-                  : 'bg-[#1F040A] text-[#F3E6D5]/80 hover:text-white font-medium border border-[#3A0C16]'
+                  : 'bg-[#F3E6D5] text-[#5C3A42] hover:text-[#1F040A] font-medium border border-[#E6D5C1]'
               }`}
             >
               <span>Malayalam</span>
@@ -71,10 +70,10 @@ export const AudioView: React.FC<AudioViewProps> = ({
             <button
               type="button"
               onClick={() => setSelectedFilter('english')}
-              className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 selectedFilter === 'english'
                   ? 'bg-[#800020] text-[#FFF9F2] font-semibold shadow-sm'
-                  : 'bg-[#1F040A] text-[#F3E6D5]/80 hover:text-white font-medium border border-[#3A0C16]'
+                  : 'bg-[#F3E6D5] text-[#5C3A42] hover:text-[#1F040A] font-medium border border-[#E6D5C1]'
               }`}
             >
               <span>English</span>
@@ -85,10 +84,10 @@ export const AudioView: React.FC<AudioViewProps> = ({
         {/* Ambient Soundwave SVG */}
         <div
           aria-hidden="true"
-          className="w-full h-12 mb-8 flex items-center justify-between text-[#800020]/40 px-2 select-none overflow-hidden opacity-90"
+          className="w-full h-12 mb-8 flex items-center justify-between text-[#800020]/30 px-2 select-none overflow-hidden"
         >
           <svg
-            className="w-full h-8 stroke-[#800020]/60"
+            className="w-full h-8 stroke-[#800020]/45"
             fill="none"
             preserveAspectRatio="none"
             viewBox="0 0 800 40"
@@ -102,7 +101,7 @@ export const AudioView: React.FC<AudioViewProps> = ({
         </div>
 
         {/* Track Rows Table */}
-        <div className="flex flex-col divide-y divide-[#3A0C16]" id="audio-track-list">
+        <div className="flex flex-col divide-y divide-[#E6D5C1]" id="audio-track-list">
           {filteredTracks.map((track) => {
             const isThisTrackActive = currentTrack?.id === track.id;
             const isThisPlaying = isThisTrackActive && isPlaying;
@@ -111,7 +110,7 @@ export const AudioView: React.FC<AudioViewProps> = ({
               <article
                 key={track.id}
                 onClick={() => onSelectTrack(track)}
-                className="group py-5 sm:py-6 flex items-start sm:items-center justify-between gap-4 transition-colors hover:bg-[#160408] -mx-3 px-3 rounded-xl cursor-pointer"
+                className="group py-5 sm:py-6 flex items-start sm:items-center justify-between gap-4 transition-colors hover:bg-[#F3E6D5]/65 -mx-3 px-3 rounded-xl cursor-pointer"
               >
                 <div className="flex items-start sm:items-center gap-4 min-w-0">
                   <button
@@ -120,12 +119,12 @@ export const AudioView: React.FC<AudioViewProps> = ({
                       e.stopPropagation();
                       onSelectTrack(track);
                     }}
-                    className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center transition-all mt-0.5 sm:mt-0 shadow-sm cursor-pointer ${
+                    className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center transition-all mt-0.5 sm:mt-0 shadow-xs cursor-pointer ${
                       isThisPlaying
-                        ? 'bg-[#800020] text-[#FFF9F2] hover:bg-[#A30029]'
+                        ? 'bg-[#800020] text-[#FFF9F2] hover:bg-[#660019]'
                         : isThisTrackActive
                         ? 'bg-[#800020] text-[#FFF9F2]'
-                        : 'bg-[#1F040A] text-[#D45060] group-hover:bg-[#800020] group-hover:text-[#FFF9F2] border border-[#3A0C16]'
+                        : 'bg-[#F3E6D5] text-[#800020] group-hover:bg-[#800020] group-hover:text-[#FFF9F2] border border-[#E6D5C1]'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[20px] leading-none">
@@ -136,23 +135,23 @@ export const AudioView: React.FC<AudioViewProps> = ({
                   <div className="flex flex-col min-w-0">
                     <h2
                       className={`text-[16px] sm:text-[17px] font-semibold tracking-tight truncate ${
-                        isThisTrackActive ? 'text-[#D45060]' : 'text-[#FFF9F2] group-hover:text-[#D45060]'
+                        isThisTrackActive ? 'text-[#800020]' : 'text-[#1F040A] group-hover:text-[#800020]'
                       }`}
                     >
                       {track.title}
                     </h2>
-                    <div className="flex items-center gap-2 text-[13px] text-[#F3E6D5]/80 mt-0.5 flex-wrap">
+                    <div className="flex items-center gap-2 text-[13px] text-[#5C3A42] mt-0.5 flex-wrap">
                       <span>{track.author}</span>
                       <span className="text-[#800020]">·</span>
                       <span className="capitalize">{track.category}</span>
                       <span className="text-[#800020]">·</span>
-                      <span>{track.duration}</span>
+                      <span className="tabular-nums">{track.duration}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 self-start sm:self-center flex-shrink-0">
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#1F040A] text-[#D45060] border border-[#3A0C16]">
+                  <span className="text-[12px] font-medium text-[#800020]">
                     {track.language}
                   </span>
                 </div>
@@ -160,27 +159,6 @@ export const AudioView: React.FC<AudioViewProps> = ({
             );
           })}
         </div>
-
-        {/* Submit Media Section */}
-        <section className="mt-16 sm:mt-24 p-8 sm:p-10 rounded-2xl bg-[#140307] border border-[#3A0C16] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xl">
-          <div className="max-w-xl">
-            <span className="text-[12px] font-semibold uppercase tracking-widest text-[#D45060] mb-2 block">
-              Campus Recordings
-            </span>
-            <h2 className="text-[22px] sm:text-[24px] font-semibold text-[#FFF9F2] mb-2">
-              Contribute Spoken Word or Audio
-            </h2>
-            <p className="text-[14px] text-[#F3E6D5]/80 leading-relaxed">
-              Have a podcast recording, interview, or Malayalam recitation from campus? Submit archival audio for the editorial committee to review.
-            </p>
-          </div>
-          <button
-            onClick={onOpenSubmitModal}
-            className="px-6 py-3 bg-[#800020] hover:bg-[#A30029] text-[#FFF9F2] rounded-[10px] font-semibold text-[14px] shadow-lg shadow-[#800020]/30 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
-          >
-            Submit Audio Recording
-          </button>
-        </section>
       </div>
     </div>
   );

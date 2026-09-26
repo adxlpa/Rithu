@@ -1,7 +1,7 @@
 /**
  * Persistent & Cloud Storage Layer for Rithu Editorial App
- * Synchronizes Audio Tracks, Video Items, and Magazine Editions across all devices
- * via Firebase Cloud Firestore, with local IndexedDB cache fallback.
+ * Synchronizes Audio Tracks, Video Items, Magazine Editions, and Uploaded Media Files
+ * across all devices via Firebase Cloud Firestore without requiring visitor login.
  */
 
 import {
@@ -32,10 +32,20 @@ const STORE_AUDIO = 'audio_tracks';
 const STORE_VIDEO = 'video_items';
 const STORE_MAGAZINE = 'magazine_edition';
 
+const EDITORIAL_KEY = 'rithu2026-cem-vault';
+const DEFAULT_ADMIN_UID = 'rithu-editorial-admin';
+
+// In-memory cache of resolved Blob URLs for firestore-media:// assets
+const resolvedMediaCache = new Map<string, string>();
+
 // Sanitize IDs to match blueprint pattern ^[a-zA-Z0-9_\-]+$ and maxLength 128
 export function sanitizeDocId(rawId: string): string {
   const cleaned = rawId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 128);
   return cleaned.length > 0 ? cleaned : `doc-${Date.now()}`;
+}
+
+function getActiveCreatorUid(): string {
+  return auth.currentUser?.uid ? sanitizeDocId(auth.currentUser.uid) : DEFAULT_ADMIN_UID;
 }
 
 // Truncate strings to enforce firebase-blueprint.json maxLength constraints
@@ -148,7 +158,7 @@ async function getItem<T>(storeName: string, key: string): Promise<T | null> {
 
 export async function loadPersistedAudioTracks(): Promise<AudioTrack[]> {
   const data = await getItem<AudioTrack[]>(STORE_AUDIO, 'all_tracks');
-  if (data !== null && Array.isArray(data) && data.length > 0) {
+  if (data !== null && Array.isArray(data)) {
     return data;
   }
   return INITIAL_AUDIO_TRACKS;
@@ -160,7 +170,7 @@ export async function savePersistedAudioTracks(tracks: AudioTrack[]): Promise<vo
 
 export async function loadPersistedVideoItems(): Promise<VideoItem[]> {
   const data = await getItem<VideoItem[]>(STORE_VIDEO, 'all_videos');
-  if (data !== null && Array.isArray(data) && data.length > 0) {
+  if (data !== null && Array.isArray(data)) {
     return data;
   }
   return INITIAL_VIDEOS;
@@ -197,6 +207,148 @@ export async function resetPersistedMagazine(): Promise<void> {
 }
 
 // ============================================================================
+// Chunked Binary File Storage in Firebase Firestore (/media_chunks)
+// ============================================================================
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Failed to read media file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function dataUrlToBlobUrl(dataUrl: string): string {
+  try {
+    const parts = dataUrl.split(',');
+    if (parts.length < 2) return dataUrl;
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    const blob = new Blob([u8arr], { type: mime });
+    return URL.createObjectURL(blob);
+  } catch {
+    return dataUrl;
+  }
+}
+
+/**
+ * Uploads an audio or video File to Firebase Firestore by splitting its base64 Data URL
+ * into 680KB chunks stored in `/media_chunks/{chunkId}` so any device can stream it without login.
+ */
+export async function uploadMediaFileToFirebase(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<string> {
+  const dataUrl = await fileToDataUrl(file);
+  const chunkSize = 680000;
+  const totalChunks = Math.ceil(dataUrl.length / chunkSize);
+
+  if (totalChunks > 95) {
+    throw new Error('File exceeds maximum cloud vault size (~45 MB). Please compress the file.');
+  }
+
+  const mediaId = sanitizeDocId(`media-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+  const creatorUid = getActiveCreatorUid();
+
+  for (let i = 0; i < totalChunks; i++) {
+    const slice = dataUrl.slice(i * chunkSize, (i + 1) * chunkSize);
+    const chunkDocId = sanitizeDocId(`${mediaId}-c-${i}`);
+    const payload = {
+      id: chunkDocId,
+      mediaId,
+      chunkIndex: i,
+      totalChunks,
+      data: slice,
+      isPublic: true,
+      createdByUid: creatorUid,
+      editorialKey: EDITORIAL_KEY,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    try {
+      await setDoc(doc(db, 'media_chunks', chunkDocId), payload);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `media_chunks/${chunkDocId}`);
+    }
+
+    if (onProgress) {
+      onProgress(Math.round(((i + 1) / totalChunks) * 100));
+    }
+  }
+
+  const refUrl = `firestore-media://${mediaId}`;
+  const blobUrl = dataUrlToBlobUrl(dataUrl);
+  resolvedMediaCache.set(refUrl, blobUrl);
+  return refUrl;
+}
+
+/**
+ * Resolves a `firestore-media://...` reference by downloading all chunks from Firestore
+ * and reassembling them into a playable Blob URL.
+ */
+export async function resolveMediaUrlFromFirebase(urlOrRef?: string): Promise<string | null> {
+  if (!urlOrRef) return null;
+  if (!urlOrRef.startsWith('firestore-media://')) {
+    return urlOrRef;
+  }
+
+  if (resolvedMediaCache.has(urlOrRef)) {
+    return resolvedMediaCache.get(urlOrRef)!;
+  }
+
+  const mediaId = sanitizeDocId(urlOrRef.replace('firestore-media://', ''));
+  try {
+    const q = query(
+      collection(db, 'media_chunks'),
+      where('isPublic', '==', true),
+      where('mediaId', '==', mediaId)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+
+    const chunks = snap.docs
+      .map((d) => d.data() as { chunkIndex: number; data: string })
+      .sort((a, b) => a.chunkIndex - b.chunkIndex);
+
+    const fullDataUrl = chunks.map((c) => c.data).join('');
+    const blobUrl = dataUrlToBlobUrl(fullDataUrl);
+    resolvedMediaCache.set(urlOrRef, blobUrl);
+    return blobUrl;
+  } catch (error) {
+    console.error('Failed to resolve Firestore media chunks:', error);
+    return null;
+  }
+}
+
+async function deleteMediaChunksIfPresent(urlOrRef?: string): Promise<void> {
+  if (!urlOrRef || !urlOrRef.startsWith('firestore-media://')) return;
+  const mediaId = sanitizeDocId(urlOrRef.replace('firestore-media://', ''));
+  try {
+    const q = query(
+      collection(db, 'media_chunks'),
+      where('isPublic', '==', true),
+      where('mediaId', '==', mediaId)
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+// ============================================================================
 // Cloud Firestore Real-Time Synchronization & CRUD
 // ============================================================================
 
@@ -217,6 +369,7 @@ function buildAudioTrackPayload(track: AudioTrack, uid: string, isUpdate = false
     description: clampStr(track.description, 2000, 'Archived audio piece from the Munnar Sound Archives.'),
     isPublic: true,
     createdByUid: sanitizeDocId(track.createdByUid || uid),
+    editorialKey: EDITORIAL_KEY,
     updatedAt: serverTimestamp(),
   };
 
@@ -253,6 +406,7 @@ function buildVideoItemPayload(video: VideoItem, uid: string, isUpdate = false) 
     imageAlt: clampStr(video.imageAlt || video.title, 200, 'Video Poster'),
     isPublic: true,
     createdByUid: sanitizeDocId(video.createdByUid || uid),
+    editorialKey: EDITORIAL_KEY,
     updatedAt: serverTimestamp(),
   };
 
@@ -268,8 +422,8 @@ function buildVideoItemPayload(video: VideoItem, uid: string, isUpdate = false) 
   if (video.description && video.description.trim()) {
     payload.description = clampStr(video.description, 2000);
   }
-  if (video.videoUrl && video.videoUrl.trim()) {
-    payload.videoUrl = clampStr(video.videoUrl, 2000);
+  if (video.videoUrl && video.videoUrl.trim() && video.videoUrl.length <= 700000) {
+    payload.videoUrl = clampStr(video.videoUrl, 700000);
   }
 
   return { docId, payload };
@@ -277,7 +431,7 @@ function buildVideoItemPayload(video: VideoItem, uid: string, isUpdate = false) 
 
 /**
  * Subscribes to live public collections in Firestore so every visitor on every device
- * automatically receives real-time updates when an admin adds, edits, or deletes content.
+ * automatically receives real-time updates without needing to log in.
  */
 export function subscribeToCloudArchive(callbacks: {
   onAudioTracks: (tracks: AudioTrack[]) => void;
@@ -286,6 +440,7 @@ export function subscribeToCloudArchive(callbacks: {
 }): () => void {
   let latestEdition: MagazineEditionInfo | null = null;
   let latestPdfPages: MagazinePage[] = [];
+  let isCloudInitialized = false;
 
   const emitMagazineIfReady = () => {
     if (!latestEdition) return;
@@ -299,12 +454,49 @@ export function subscribeToCloudArchive(callbacks: {
     }
   };
 
-  // 1. Audio Tracks Listener
+  // Ensure cloud archive is seeded on first run
+  seedInitialCloudDataIfNeeded(
+    INITIAL_AUDIO_TRACKS,
+    INITIAL_VIDEOS,
+    INITIAL_MAGAZINE_EDITION
+  )
+    .then(() => {
+      isCloudInitialized = true;
+    })
+    .catch(() => {});
+
+  // 1. Magazine Edition Listener
+  const editionQuery = query(collection(db, 'magazine_edition'), where('isPublic', '==', true));
+  const unsubEdition = onSnapshot(
+    editionQuery,
+    (snapshot) => {
+      const currentDoc = snapshot.docs.find((d) => d.id === 'current') || snapshot.docs[0];
+      if (currentDoc) {
+        isCloudInitialized = true;
+        const d = currentDoc.data();
+        latestEdition = {
+          title: d.title,
+          year: d.year,
+          institution: d.institution,
+          totalPages: d.totalPages,
+          sourceType: d.sourceType,
+          fileName: d.fileName,
+          updatedAt: 'Synced via Cloud',
+        };
+        emitMagazineIfReady();
+      }
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'magazine_edition');
+    }
+  );
+
+  // 2. Audio Tracks Listener
   const audioQuery = query(collection(db, 'audio_tracks'), where('isPublic', '==', true));
   const unsubAudio = onSnapshot(
     audioQuery,
     (snapshot) => {
-      if (!snapshot.empty) {
+      if (!snapshot.empty || isCloudInitialized) {
         const tracks: AudioTrack[] = snapshot.docs.map((docSnap) => {
           const d = docSnap.data();
           return {
@@ -332,12 +524,12 @@ export function subscribeToCloudArchive(callbacks: {
     }
   );
 
-  // 2. Video Items Listener
+  // 3. Video Items Listener
   const videoQuery = query(collection(db, 'video_items'), where('isPublic', '==', true));
   const unsubVideo = onSnapshot(
     videoQuery,
     (snapshot) => {
-      if (!snapshot.empty) {
+      if (!snapshot.empty || isCloudInitialized) {
         const videos: VideoItem[] = snapshot.docs.map((docSnap) => {
           const d = docSnap.data();
           return {
@@ -362,31 +554,6 @@ export function subscribeToCloudArchive(callbacks: {
     },
     (error) => {
       handleFirestoreError(error, OperationType.LIST, 'video_items');
-    }
-  );
-
-  // 3. Magazine Edition Listener
-  const editionQuery = query(collection(db, 'magazine_edition'), where('isPublic', '==', true));
-  const unsubEdition = onSnapshot(
-    editionQuery,
-    (snapshot) => {
-      const currentDoc = snapshot.docs.find((d) => d.id === 'current') || snapshot.docs[0];
-      if (currentDoc) {
-        const d = currentDoc.data();
-        latestEdition = {
-          title: d.title,
-          year: d.year,
-          institution: d.institution,
-          totalPages: d.totalPages,
-          sourceType: d.sourceType,
-          fileName: d.fileName,
-          updatedAt: 'Synced via Cloud',
-        };
-        emitMagazineIfReady();
-      }
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'magazine_edition');
     }
   );
 
@@ -428,74 +595,72 @@ export function subscribeToCloudArchive(callbacks: {
 
 /**
  * Seeds the cloud Firestore database with initial audio tracks, videos, and magazine edition
- * if the cloud collections are currently empty when an authenticated admin logs in.
+ * if `/magazine_edition/current` has never been created yet.
  */
 export async function seedInitialCloudDataIfNeeded(
   currentAudio: AudioTrack[],
   currentVideos: VideoItem[],
   currentEdition: MagazineEditionInfo
 ): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) return;
+  const creatorUid = getActiveCreatorUid();
 
   try {
-    const [audioSnap, videoSnap, editionSnap] = await Promise.all([
+    const editionSnap = await getDocs(
+      query(collection(db, 'magazine_edition'), where('isPublic', '==', true))
+    );
+
+    if (!editionSnap.empty) {
+      return;
+    }
+
+    const [audioSnap, videoSnap] = await Promise.all([
       getDocs(query(collection(db, 'audio_tracks'), where('isPublic', '==', true))),
       getDocs(query(collection(db, 'video_items'), where('isPublic', '==', true))),
-      getDocs(query(collection(db, 'magazine_edition'), where('isPublic', '==', true))),
     ]);
 
     const batch = writeBatch(db);
-    let hasWrites = false;
 
     if (audioSnap.empty) {
       for (const track of currentAudio) {
-        const { docId, payload } = buildAudioTrackPayload(track, user.uid, false);
+        const { docId, payload } = buildAudioTrackPayload(track, creatorUid, false);
         batch.set(doc(db, 'audio_tracks', docId), payload);
-        hasWrites = true;
       }
     }
 
     if (videoSnap.empty) {
       for (const video of currentVideos) {
-        const { docId, payload } = buildVideoItemPayload(video, user.uid, false);
+        const { docId, payload } = buildVideoItemPayload(video, creatorUid, false);
         batch.set(doc(db, 'video_items', docId), payload);
-        hasWrites = true;
       }
     }
 
-    if (editionSnap.empty) {
-      const editionPayload: Record<string, unknown> = {
-        id: 'current',
-        title: clampStr(currentEdition.title, 200, INITIAL_MAGAZINE_EDITION.title),
-        year: clampStr(currentEdition.year, 20, '2026'),
-        institution: clampStr(currentEdition.institution, 200, 'College of Engineering Munnar'),
-        totalPages: Math.max(1, Math.min(200, currentEdition.totalPages || 16)),
-        sourceType: currentEdition.sourceType === 'pdf' ? 'pdf' : 'curated',
-        isPublic: true,
-        createdByUid: sanitizeDocId(user.uid),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-      if (currentEdition.fileName) {
-        editionPayload.fileName = clampStr(currentEdition.fileName, 255);
-      }
-      batch.set(doc(db, 'magazine_edition', 'current'), editionPayload);
-      hasWrites = true;
+    const editionPayload: Record<string, unknown> = {
+      id: 'current',
+      title: clampStr(currentEdition.title, 200, INITIAL_MAGAZINE_EDITION.title),
+      year: clampStr(currentEdition.year, 20, '2026'),
+      institution: clampStr(currentEdition.institution, 200, 'College of Engineering Munnar'),
+      totalPages: Math.max(1, Math.min(200, currentEdition.totalPages || 16)),
+      sourceType: currentEdition.sourceType === 'pdf' ? 'pdf' : 'curated',
+      isPublic: true,
+      createdByUid: creatorUid,
+      editorialKey: EDITORIAL_KEY,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    if (currentEdition.fileName) {
+      editionPayload.fileName = clampStr(currentEdition.fileName, 255);
     }
+    batch.set(doc(db, 'magazine_edition', 'current'), editionPayload);
 
-    if (hasWrites) {
-      await batch.commit();
-    }
+    await batch.commit();
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, 'seed_initial_archive');
+    console.warn('Initial cloud archive check notice:', error);
   }
 }
 
 export async function saveCloudAudioTrack(track: AudioTrack): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) return;
-  const { docId, payload } = buildAudioTrackPayload(track, user.uid, false);
+  const creatorUid = getActiveCreatorUid();
+  const { docId, payload } = buildAudioTrackPayload(track, creatorUid, false);
   try {
     await setDoc(doc(db, 'audio_tracks', docId), payload);
   } catch (error) {
@@ -504,31 +669,33 @@ export async function saveCloudAudioTrack(track: AudioTrack): Promise<void> {
 }
 
 export async function updateCloudAudioTrack(track: AudioTrack): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) return;
-  const { docId, payload } = buildAudioTrackPayload(track, user.uid, true);
+  const creatorUid = getActiveCreatorUid();
+  const { docId, payload } = buildAudioTrackPayload(track, creatorUid, true);
   try {
     await updateDoc(doc(db, 'audio_tracks', docId), payload);
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `audio_tracks/${docId}`);
+    try {
+      const fresh = buildAudioTrackPayload(track, creatorUid, false);
+      await setDoc(doc(db, 'audio_tracks', docId), fresh.payload);
+    } catch (innerErr) {
+      handleFirestoreError(innerErr, OperationType.UPDATE, `audio_tracks/${docId}`);
+    }
   }
 }
 
-export async function deleteCloudAudioTrack(id: string): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) return;
+export async function deleteCloudAudioTrack(id: string, audioUrl?: string): Promise<void> {
   const docId = sanitizeDocId(id);
   try {
     await deleteDoc(doc(db, 'audio_tracks', docId));
+    await deleteMediaChunksIfPresent(audioUrl);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `audio_tracks/${docId}`);
   }
 }
 
 export async function saveCloudVideoItem(video: VideoItem): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) return;
-  const { docId, payload } = buildVideoItemPayload(video, user.uid, false);
+  const creatorUid = getActiveCreatorUid();
+  const { docId, payload } = buildVideoItemPayload(video, creatorUid, false);
   try {
     await setDoc(doc(db, 'video_items', docId), payload);
   } catch (error) {
@@ -537,22 +704,25 @@ export async function saveCloudVideoItem(video: VideoItem): Promise<void> {
 }
 
 export async function updateCloudVideoItem(video: VideoItem): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) return;
-  const { docId, payload } = buildVideoItemPayload(video, user.uid, true);
+  const creatorUid = getActiveCreatorUid();
+  const { docId, payload } = buildVideoItemPayload(video, creatorUid, true);
   try {
     await updateDoc(doc(db, 'video_items', docId), payload);
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `video_items/${docId}`);
+    try {
+      const fresh = buildVideoItemPayload(video, creatorUid, false);
+      await setDoc(doc(db, 'video_items', docId), fresh.payload);
+    } catch (innerErr) {
+      handleFirestoreError(innerErr, OperationType.UPDATE, `video_items/${docId}`);
+    }
   }
 }
 
-export async function deleteCloudVideoItem(id: string): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) return;
+export async function deleteCloudVideoItem(id: string, videoUrl?: string): Promise<void> {
   const docId = sanitizeDocId(id);
   try {
     await deleteDoc(doc(db, 'video_items', docId));
+    await deleteMediaChunksIfPresent(videoUrl);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `video_items/${docId}`);
   }
@@ -560,10 +730,10 @@ export async function deleteCloudVideoItem(id: string): Promise<void> {
 
 export async function saveCloudMagazineEditionAndPages(
   pages: MagazinePage[],
-  edition: MagazineEditionInfo
+  edition: MagazineEditionInfo,
+  onProgress?: (percent: number) => void
 ): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) return;
+  const creatorUid = getActiveCreatorUid();
 
   try {
     // 1. Delete existing magazine_pages first so stale pages from a longer prior PDF don't remain
@@ -590,7 +760,8 @@ export async function saveCloudMagazineEditionAndPages(
       totalPages: Math.max(1, Math.min(200, pages.length)),
       sourceType: edition.sourceType === 'pdf' ? 'pdf' : 'curated',
       isPublic: true,
-      createdByUid: sanitizeDocId(user.uid),
+      createdByUid: creatorUid,
+      editorialKey: EDITORIAL_KEY,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -615,11 +786,15 @@ export async function saveCloudMagazineEditionAndPages(
           subtitle: clampStr(page.subtitle, 200, `PDF Page ${i + 1} of ${pages.length}`),
           pdfImageUrl: clampStr(page.pdfImageUrl, 850000, 'https://via.placeholder.com/600x800'),
           isPublic: true,
-          createdByUid: sanitizeDocId(user.uid),
+          createdByUid: creatorUid,
+          editorialKey: EDITORIAL_KEY,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         };
         await setDoc(doc(db, 'magazine_pages', pageDocId), pagePayload);
+        if (onProgress) {
+          onProgress(Math.round(((i + 1) / pages.length) * 100));
+        }
       }
     }
   } catch (error) {
@@ -628,8 +803,7 @@ export async function saveCloudMagazineEditionAndPages(
 }
 
 export async function resetCloudMagazineToCurated(): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) return;
+  const creatorUid = getActiveCreatorUid();
 
   try {
     const existingPagesSnap = await getDocs(
@@ -654,7 +828,8 @@ export async function resetCloudMagazineToCurated(): Promise<void> {
       totalPages: INITIAL_MAGAZINE_EDITION.totalPages,
       sourceType: 'curated',
       isPublic: true,
-      createdByUid: sanitizeDocId(user.uid),
+      createdByUid: creatorUid,
+      editorialKey: EDITORIAL_KEY,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });

@@ -57,12 +57,13 @@ export default function App() {
 
   // Authentication State
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
-  const [isCloudSynced, setIsCloudSynced] = useState<boolean>(false);
+  const [isCloudSynced, setIsCloudSynced] = useState<boolean>(true);
   const [adminUser, setAdminUser] = useState<string>('Editor');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
 
-  // Audio Player State: default to Track 2 "Editorial: The Architecture of Memory"
-  const [currentTrack, setCurrentTrack] = useState<AudioTrack | null>(INITIAL_AUDIO_TRACKS[1]);
+  // Audio Player State: Starts as null so "Now Playing" is NEVER shown on page load/refresh
+  // Only shown when audio is actively played by the user.
+  const [currentTrack, setCurrentTrack] = useState<AudioTrack | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
 
   // Video Modal State
@@ -77,7 +78,7 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // 1. Initial Load from Local Cache + Live Real-Time Cloud Firestore Subscription
+  // 1. Initial Load from Local Cache + Live Real-Time Cloud Firestore Subscription (No login needed for visitors)
   useEffect(() => {
     let isMounted = true;
     async function initStorage() {
@@ -92,11 +93,6 @@ export default function App() {
           setVideoItems(loadedVideos);
           setMagazinePages(loadedMag.pages);
           setMagazineEdition(loadedMag.edition);
-          if (loadedTracks.length > 0) {
-            setCurrentTrack(loadedTracks[0]);
-          } else {
-            setCurrentTrack(null);
-          }
           setIsStorageReady(true);
         }
       } catch (err) {
@@ -106,7 +102,7 @@ export default function App() {
     }
     initStorage();
 
-    // Subscribe to real-time updates from Cloud Firestore across all devices
+    // Subscribe to real-time updates from Cloud Firestore across all devices without login
     const unsubscribeCloud = subscribeToCloudArchive({
       onAudioTracks: (cloudTracks) => {
         if (isMounted) {
@@ -132,7 +128,7 @@ export default function App() {
     };
   }, []);
 
-  // 2. Listen to Firebase Auth state for Cloud Admin synchronization
+  // 2. Listen to Firebase Auth state for optional Google Admin session
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -142,10 +138,8 @@ export default function App() {
         try {
           await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition);
         } catch (err) {
-          console.warn('Initial cloud seed skipped or unauthorized:', err);
+          console.warn('Initial cloud seed notice:', err);
         }
-      } else {
-        setIsCloudSynced(false);
       }
     });
     return () => unsubscribeAuth();
@@ -197,18 +191,12 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleLoginSuccess = (user: string, isCloud?: boolean) => {
+  const handleLoginSuccess = (user: string) => {
     setIsAdminLoggedIn(true);
+    setIsCloudSynced(true);
     setAdminUser(user);
-    if (isCloud) {
-      setIsCloudSynced(true);
-    }
     setCurrentView('admin-portal');
-    showToast(
-      isCloud
-        ? `Signed in as ${user}. Global Cloud Sync active for all devices.`
-        : `Welcome back, ${user}. Editorial privileges granted.`
-    );
+    showToast(`Signed in as ${user}. Firebase Cloud Sync active for all devices.`);
   };
 
   const handleConnectCloudAdmin = async () => {
@@ -218,7 +206,7 @@ export default function App() {
       setIsCloudSynced(true);
       setAdminUser(user.displayName || user.email || 'Cloud Admin');
       await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition);
-      showToast('Global Cloud Sync enabled! All uploads now sync across every device.');
+      showToast('Google Admin connected! All uploads sync across every device.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not connect Google account.';
       showToast(`Cloud auth notice: ${msg}`);
@@ -230,27 +218,22 @@ export default function App() {
       await signOut(auth).catch(() => {});
     }
     setIsAdminLoggedIn(false);
-    setIsCloudSynced(false);
     setCurrentView('home');
     showToast('Signed out of Admin Workspace.');
   };
 
-  // Magazine Handlers (Permanent Local + Cloud Persistence)
+  // Magazine Handlers (Always stored in Firebase for everyone without login)
   const handleUpdateMagazinePages = async (newPages: MagazinePage[], newInfo: MagazineEditionInfo) => {
     setMagazinePages(newPages);
     setMagazineEdition(newInfo);
     savePersistedMagazine(newPages, newInfo);
-    if (auth.currentUser) {
-      try {
-        showToast('Syncing magazine pages to Cloud Database for all devices...');
-        await saveCloudMagazineEditionAndPages(newPages, newInfo);
-        showToast('Magazine archive synced globally across all devices!');
-      } catch (err) {
-        console.error('Cloud magazine sync failed:', err);
-        showToast('Saved locally. Sign in with authorized admin Google account for global sync.');
-      }
-    } else {
-      showToast('Magazine updated locally. Enable Global Device Sync in Admin to publish to all devices.');
+    try {
+      showToast('Uploading magazine pages to Firebase for all visitors...');
+      await saveCloudMagazineEditionAndPages(newPages, newInfo);
+      showToast('Magazine synced to Firebase! Live for everyone across all devices.');
+    } catch (err) {
+      console.error('Cloud magazine sync failed:', err);
+      showToast('Magazine saved locally.');
     }
   };
 
@@ -258,47 +241,39 @@ export default function App() {
     await resetPersistedMagazine();
     setMagazinePages(DEFAULT_MAGAZINE_PAGES);
     setMagazineEdition(INITIAL_MAGAZINE_EDITION);
-    if (auth.currentUser) {
-      try {
-        await resetCloudMagazineToCurated();
-        showToast('Magazine restored to official default edition across all devices.');
-      } catch (err) {
-        console.error('Cloud magazine reset failed:', err);
-        showToast('Magazine restored locally.');
-      }
-    } else {
-      showToast('Magazine restored to official default edition.');
+    try {
+      await resetCloudMagazineToCurated();
+      showToast('Magazine restored to official default edition across all devices.');
+    } catch (err) {
+      console.error('Cloud magazine reset failed:', err);
+      showToast('Magazine restored locally.');
     }
   };
 
-  // Admin CRUD for Audio (Permanent Local + Cloud Persistence)
+  // Admin CRUD for Audio (Always stored in Firebase for everyone without login)
   const handleAddAudioTrack = async (track: AudioTrack) => {
     const trackWithOwner: AudioTrack = {
       ...track,
-      createdByUid: auth.currentUser?.uid || 'local-admin',
+      createdByUid: auth.currentUser?.uid || 'rithu-editorial-admin',
     };
     setAudioTracks((prev) => {
       const next = [trackWithOwner, ...prev];
       savePersistedAudioTracks(next);
       return next;
     });
-    if (auth.currentUser) {
-      try {
-        await saveCloudAudioTrack(trackWithOwner);
-        showToast(`Audio track "${track.title}" published globally to all devices.`);
-      } catch (err) {
-        console.error('Cloud audio create failed:', err);
-        showToast(`Saved "${track.title}" locally.`);
-      }
-    } else {
-      showToast(`Audio track "${track.title}" permanently added.`);
+    try {
+      await saveCloudAudioTrack(trackWithOwner);
+      showToast(`Audio track "${track.title}" stored in Firebase for all visitors.`);
+    } catch (err) {
+      console.error('Cloud audio create failed:', err);
+      showToast(`Saved "${track.title}" locally.`);
     }
   };
 
   const handleUpdateAudioTrack = async (track: AudioTrack) => {
     const updatedTrack: AudioTrack = {
       ...track,
-      createdByUid: track.createdByUid || auth.currentUser?.uid || 'local-admin',
+      createdByUid: track.createdByUid || auth.currentUser?.uid || 'rithu-editorial-admin',
     };
     setAudioTracks((prev) => {
       const next = prev.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
@@ -308,20 +283,17 @@ export default function App() {
     if (currentTrack?.id === updatedTrack.id) {
       setCurrentTrack(updatedTrack);
     }
-    if (auth.currentUser) {
-      try {
-        await updateCloudAudioTrack(updatedTrack);
-        showToast(`Audio track "${track.title}" updated across all devices.`);
-      } catch (err) {
-        console.error('Cloud audio update failed:', err);
-        showToast(`Updated "${track.title}" locally.`);
-      }
-    } else {
-      showToast(`Audio track "${track.title}" permanently updated.`);
+    try {
+      await updateCloudAudioTrack(updatedTrack);
+      showToast(`Audio track "${track.title}" updated in Firebase across all devices.`);
+    } catch (err) {
+      console.error('Cloud audio update failed:', err);
+      showToast(`Updated "${track.title}" locally.`);
     }
   };
 
   const handleDeleteAudioTrack = async (id: string) => {
+    const target = audioTracks.find((t) => t.id === id);
     setAudioTracks((prev) => {
       const next = prev.filter((t) => t.id !== id);
       savePersistedAudioTracks(next);
@@ -331,97 +303,82 @@ export default function App() {
       setIsPlayingAudio(false);
       setCurrentTrack(null);
     }
-    if (auth.currentUser) {
-      try {
-        await deleteCloudAudioTrack(id);
-        showToast('Audio track permanently removed from all devices.');
-      } catch (err) {
-        console.error('Cloud audio delete failed:', err);
-        showToast('Audio track removed locally.');
-      }
-    } else {
-      showToast('Audio track permanently removed.');
+    try {
+      await deleteCloudAudioTrack(id, target?.audioUrl);
+      showToast('Audio track permanently removed from Firebase across all devices.');
+    } catch (err) {
+      console.error('Cloud audio delete failed:', err);
+      showToast('Audio track removed locally.');
     }
   };
 
-  // Admin CRUD for Video (Permanent Local + Cloud Persistence)
+  // Admin CRUD for Video (Always stored in Firebase for everyone without login)
   const handleAddVideoItem = async (video: VideoItem) => {
     const videoWithOwner: VideoItem = {
       ...video,
-      createdByUid: auth.currentUser?.uid || 'local-admin',
+      createdByUid: auth.currentUser?.uid || 'rithu-editorial-admin',
     };
     setVideoItems((prev) => {
       const next = [videoWithOwner, ...prev];
       savePersistedVideoItems(next);
       return next;
     });
-    if (auth.currentUser) {
-      try {
-        await saveCloudVideoItem(videoWithOwner);
-        showToast(`Video "${video.title}" published globally to all devices.`);
-      } catch (err) {
-        console.error('Cloud video create failed:', err);
-        showToast(`Saved "${video.title}" locally.`);
-      }
-    } else {
-      showToast(`Video "${video.title}" permanently added.`);
+    try {
+      await saveCloudVideoItem(videoWithOwner);
+      showToast(`Video "${video.title}" stored in Firebase for all visitors.`);
+    } catch (err) {
+      console.error('Cloud video create failed:', err);
+      showToast(`Saved "${video.title}" locally.`);
     }
   };
 
   const handleUpdateVideoItem = async (video: VideoItem) => {
     const updatedVideo: VideoItem = {
       ...video,
-      createdByUid: video.createdByUid || auth.currentUser?.uid || 'local-admin',
+      createdByUid: video.createdByUid || auth.currentUser?.uid || 'rithu-editorial-admin',
     };
     setVideoItems((prev) => {
       const next = prev.map((v) => (v.id === updatedVideo.id ? updatedVideo : v));
       savePersistedVideoItems(next);
       return next;
     });
-    if (auth.currentUser) {
-      try {
-        await updateCloudVideoItem(updatedVideo);
-        showToast(`Video "${video.title}" updated across all devices.`);
-      } catch (err) {
-        console.error('Cloud video update failed:', err);
-        showToast(`Updated "${video.title}" locally.`);
-      }
-    } else {
-      showToast(`Video "${video.title}" permanently updated.`);
+    try {
+      await updateCloudVideoItem(updatedVideo);
+      showToast(`Video "${video.title}" updated in Firebase across all devices.`);
+    } catch (err) {
+      console.error('Cloud video update failed:', err);
+      showToast(`Updated "${video.title}" locally.`);
     }
   };
 
   const handleDeleteVideoItem = async (id: string) => {
+    const target = videoItems.find((v) => v.id === id);
     setVideoItems((prev) => {
       const next = prev.filter((v) => v.id !== id);
       savePersistedVideoItems(next);
       return next;
     });
-    if (auth.currentUser) {
-      try {
-        await deleteCloudVideoItem(id);
-        showToast('Video record permanently removed from all devices.');
-      } catch (err) {
-        console.error('Cloud video delete failed:', err);
-        showToast('Video record removed locally.');
-      }
-    } else {
-      showToast('Video record permanently removed.');
+    try {
+      await deleteCloudVideoItem(id, target?.videoUrl);
+      showToast('Video record permanently removed from Firebase across all devices.');
+    } catch (err) {
+      console.error('Cloud video delete failed:', err);
+      showToast('Video record removed locally.');
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0E0205] text-[#FFF9F2] selection:bg-[#800020] selection:text-[#FFF9F2]">
+    <div className="min-h-screen flex flex-col bg-[#FFF9F2] text-[#1F040A] selection:bg-[#800020] selection:text-[#FFF9F2]">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 bg-[#1F040A] text-[#FFF9F2] px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-[#800020]/40 animate-slideDown">
-          <span className="material-symbols-outlined text-[#D45060] text-[20px]">
+        <div className="fixed top-20 right-6 z-50 bg-[#FFF9F2] text-[#1F040A] px-5 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-[#800020]/30 animate-slideDown">
+          <span className="material-symbols-outlined text-[#800020] text-[20px]">
             check_circle
           </span>
           <span className="text-[14px] font-medium">{toastMessage}</span>
           <button
             onClick={() => setToastMessage(null)}
-            className="ml-2 text-[#F3E6D5]/70 hover:text-white cursor-pointer"
+            className="ml-2 text-[#5C3A42] hover:text-[#1F040A] cursor-pointer"
           >
             ✕
           </button>
@@ -513,16 +470,18 @@ export default function App() {
             />
           ) : (
             <div className="w-full flex-1 flex flex-col items-center justify-center p-12 text-center min-h-[60vh]">
-              <div className="w-16 h-16 rounded-full bg-[#1F040A] border border-[#800020]/40 flex items-center justify-center text-[#D45060] mb-4 shadow-lg">
+              <div className="w-16 h-16 rounded-full bg-[#F3E6D5] border border-[#E6D5C1] flex items-center justify-center text-[#800020] mb-4 shadow-sm">
                 <span className="material-symbols-outlined text-[32px]">lock</span>
               </div>
-              <h2 className="text-[24px] font-semibold text-[#FFF9F2] mb-2">Admin Authentication Required</h2>
-              <p className="text-[15px] text-[#F3E6D5]/80 max-w-sm mb-6">
-                Please sign in with your Google Admin account to catalog and publish college archives across all devices.
+              <h2 className="text-[24px] font-semibold text-[#1F040A] mb-2 font-serif">
+                Admin Authentication Required
+              </h2>
+              <p className="text-[15px] text-[#5C3A42] max-w-sm mb-6">
+                Please sign in as Admin to upload magazines, audio, and video to Firebase for all visitors.
               </p>
               <button
                 onClick={() => setIsLoginModalOpen(true)}
-                className="px-6 py-2.5 bg-[#800020] hover:bg-[#A30029] text-[#FFF9F2] rounded-[10px] font-semibold text-[15px] shadow-lg shadow-[#800020]/30 active:scale-[0.98] transition-all cursor-pointer"
+                className="px-6 py-2.5 bg-[#800020] hover:bg-[#660019] text-[#FFF9F2] rounded-[10px] font-semibold text-[15px] shadow-md shadow-[#800020]/20 active:scale-[0.98] transition-all cursor-pointer"
               >
                 Sign In to Admin
               </button>
@@ -531,8 +490,8 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Audio Player (available on home, audio, video, admin when track is selected) */}
-      {currentView !== 'magazine' && currentTrack && (
+      {/* Floating Audio Player: Only shown while audio is played (never shown on refresh or idle home page) */}
+      {currentView !== 'magazine' && currentTrack && isPlayingAudio && (
         <FloatingAudioPlayer
           currentTrack={currentTrack}
           isPlaying={isPlayingAudio}
@@ -569,7 +528,7 @@ export default function App() {
       {/* Footer */}
       <Footer
         onNavigate={handleNavigate}
-        dark={currentView === 'magazine'}
+        dark={false}
         isAdminLoggedIn={isAdminLoggedIn}
         onOpenLogin={() => setIsLoginModalOpen(true)}
       />

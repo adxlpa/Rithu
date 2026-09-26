@@ -8,67 +8,72 @@ interface HomeViewProps {
 
 export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onPlayAudioDirect }) => {
   return (
-    <div className="flex flex-col w-full pb-24 animate-fadeIn bg-[#0E0205] text-[#FFF9F2]">
+    <div className="flex flex-col w-full pb-24 animate-fadeIn bg-[#FFF9F2] text-[#1F040A]">
       {/* Hero Section */}
       <section className="max-w-[1120px] mx-auto w-full px-4 sm:px-6 pt-12 sm:pt-20 pb-16 flex flex-col items-center text-center">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#1F040A] border border-[#800020]/50 text-[#D45060] text-[12px] font-semibold tracking-wider uppercase mb-5 shadow-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#D45060] animate-pulse"></span>
+          <div className="inline-flex items-center gap-2 text-[#800020] text-[12px] font-semibold tracking-widest uppercase mb-5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#800020]"></span>
             <span>College of Engineering Munnar · 2026</span>
           </div>
 
-          <h1 className="text-[48px] sm:text-[68px] leading-[1.05] font-bold text-[#FFF9F2] tracking-[-0.03em] mb-4">
+          <h1 className="text-[48px] sm:text-[68px] leading-[1.05] font-bold text-[#800020] tracking-[-0.03em] mb-4 font-serif">
             Rithu
           </h1>
-          <p className="text-[18px] sm:text-[21px] text-[#F3E6D5]/80 font-normal mb-8 tracking-tight max-w-lg">
+          <p className="text-[18px] sm:text-[21px] text-[#5C3A42] font-normal mb-8 tracking-tight max-w-lg leading-relaxed">
             Read it. Hear it. Relive it.
+            <br />
+            <span className="text-[15px] sm:text-[17px] text-[#5C3A42]/90 block mt-1.5">
+              A collection of voices, memories, creativity, and moments from the College of Engineering Munnar.
+            </span>
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-6">
+          /*<div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-6">
             <button
               onClick={() => onNavigate('magazine')}
-              className="inline-flex items-center justify-center px-8 h-12 bg-[#800020] hover:bg-[#A30029] text-[#FFF9F2] text-[15px] font-semibold rounded-[10px] shadow-lg shadow-[#800020]/30 active:scale-[0.98] transition-all cursor-pointer"
+              className="inline-flex items-center justify-center px-8 h-12 bg-[#800020] hover:bg-[#660019] text-[#FFF9F2] text-[15px] font-semibold rounded-[10px] shadow-md shadow-[#800020]/20 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
             >
               Read Magazine
             </button>
-            <div className="flex items-center gap-3.5 text-[15px] font-semibold text-[#FFF9F2]">
+            <div className="flex items-center gap-3.5 text-[15px] font-semibold text-[#1F040A]">
               <button
                 onClick={() => onNavigate('audio')}
-                className="hover:text-[#D45060] transition-colors underline-offset-4 hover:underline cursor-pointer"
+                className="hover:text-[#800020] transition-colors underline-offset-4 hover:underline cursor-pointer whitespace-nowrap"
               >
                 Listen
               </button>
               <span className="text-[#800020] select-none">·</span>
               <button
                 onClick={() => onNavigate('video')}
-                className="hover:text-[#D45060] transition-colors underline-offset-4 hover:underline cursor-pointer"
+                className="hover:text-[#800020] transition-colors underline-offset-4 hover:underline cursor-pointer whitespace-nowrap"
               >
                 Watch
               </button>
             </div>
-          </div>
+          </div>*/
         </div>
 
         {/* Panoramic Landscape Hero Image */}
         <div className="w-full mt-14 sm:mt-18">
           <div
             onClick={() => onNavigate('magazine')}
-            className="group relative w-full aspect-[21/9] min-h-[280px] max-h-[540px] rounded-[16px] overflow-hidden bg-[#160408] border border-[#3A0C16] shadow-2xl transition-all duration-300 cursor-pointer"
+            className="group relative w-full aspect-[21/9] min-h-[280px] max-h-[540px] rounded-[16px] overflow-hidden bg-[#F3E6D5] border border-[#E6D5C1] shadow-xl transition-all duration-300 cursor-pointer"
           >
             <img
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCMYT5MeU1CgDn1zkc0QZdv-U8IukmoR1mRL1KIXLQSrJ2esgOA0_LpNJ1ryRNCAqHc7J8BwZlfGGaxXAxq9Oo5CivIVucBzvW1qrpur39kSx75SwYBcfZVooY6UZHmGQ5HdGnbm1p_Ebe0rVQ0UwvGrte0g8Iq2m73fTh0X5Ig9Qy5DrjSC2g97n73GCT_cz-j4GPb5XwKA9JbRuE1q8vaq9lCiHklckt6dIiaNf5b2Tef2Qe3yiCN"
+              src="https://imguser.free.nf/uploads/0_1790440794_6ab7f55a9e0f2_title.jpg"
               alt="Misty tea plantations and hills surrounding College of Engineering Munnar campus"
-              className="w-full h-full object-cover opacity-85 brightness-90 transition-transform duration-700 ease-out group-hover:scale-[1.02]"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0E0205] via-transparent to-transparent flex items-end p-6 sm:p-8">
-              <span className="text-white text-[14px] font-semibold flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#800020]/90 backdrop-blur-sm shadow-md">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent flex items-end p-6 sm:p-8">
+              <span className="text-[#FFF9F2] text-[14px] font-semibold flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#800020] hover:bg-[#660019] shadow-md transition-colors">
                 Open 3D Flipbook Magazine <span className="text-sm">→</span>
               </span>
             </div>
           </div>
-          <div className="flex justify-between items-center mt-3 px-1 text-[#F3E6D5]/80">
-            <p className="text-[12px] font-medium text-left">The Annual Edition · Munnar 2026</p>
-            <p className="text-[12px] font-medium text-right opacity-70">Vol. XII · Digital Issue</p>
+          <div className="flex justify-between items-center mt-3 px-1 text-[#5C3A42]">
+            <p className="text-[12px] font-medium text-left">The Annual Edition Magazine · CE Munnar 2026</p>
+            <p className="text-[12px] font-medium text-right opacity-80">Digital Issue</p>
           </div>
         </div>
       </section>
@@ -79,25 +84,26 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onPlayAudioDirec
           {/* Card 1: Magazine */}
           <article
             onClick={() => onNavigate('magazine')}
-            className="flex flex-col group cursor-pointer bg-[#140307] border border-[#3A0C16] hover:border-[#800020] p-5 rounded-[16px] transition-all duration-300 shadow-xl"
+            className="flex flex-col group cursor-pointer bg-[#F3E6D5]/65 hover:bg-[#F3E6D5] border border-[#E6D5C1] hover:border-[#800020]/40 p-5 rounded-[16px] transition-all duration-300 shadow-sm hover:shadow-md"
           >
-            <div className="w-full aspect-[4/5] rounded-[12px] overflow-hidden bg-[#1F040A] mb-5 relative">
+            <div className="w-full aspect-[4/5] rounded-[12px] overflow-hidden bg-[#EAD8C3] mb-5 relative border border-[#E6D5C1]">
               <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3WpmmcMyI8ECfaU0fh8DcQIJ4rcQpVj7nA9xsd3iYZUqAVRKE3CWXT4rYh7893B_DcdRye7LJZ55q-7WX5SQa1_KAfbJLS6zD29GDvbrvGYa9IavG9T3u0bfyQqGmSFlkCi-otkNCymf5dkwaeXmMSrAmUae8bRzps7lFbYOdXSRreAkUWc6HvNKEw7_rv6KSeSpEdZM6hmEmDZ8rDVfhru47toMqjhzySByjqSk-1CsxXuf05ZBe"
-                alt="Editorial minimal book cover of Rithu college magazine"
+                src="https://imguser.free.nf/uploads/0_1790441180_6ab7f6dc35e76_ChatGPTImageMar12202602_29_59PM.png"
+                alt="Rithu Magazine Cover"
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
               />
             </div>
             <div className="flex flex-col flex-1">
-              <h2 className="text-[22px] font-semibold text-[#FFF9F2] mb-1.5 tracking-tight group-hover:text-[#D45060] transition-colors">
+              <h2 className="text-[22px] font-semibold text-[#1F040A] mb-1.5 tracking-tight group-hover:text-[#800020] transition-colors">
                 Magazine
               </h2>
-              <p className="text-[14px] leading-relaxed text-[#F3E6D5]/80 mb-4">
-                Open the interactive issue with real physical book bottom-corner page curls and mouse peeling.
+              <p className="text-[14px] leading-relaxed text-[#5C3A42] mb-4">
+                Explore Rithu, our college magazine, bringing together the creativity, experiences, achievements, and memories of the CEM community.
               </p>
               <div className="mt-auto pt-1">
-                <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#D45060] group-hover:translate-x-1 transition-all">
-                  Read Issue <span className="text-sm font-normal">→</span>
+                <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#800020] group-hover:translate-x-1 transition-all">
+                  Read Magazine <span className="text-sm font-normal">→</span>
                 </span>
               </div>
             </div>
@@ -106,24 +112,25 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onPlayAudioDirec
           {/* Card 2: Video */}
           <article
             onClick={() => onNavigate('video')}
-            className="flex flex-col group cursor-pointer bg-[#140307] border border-[#3A0C16] hover:border-[#800020] p-5 rounded-[16px] transition-all duration-300 shadow-xl"
+            className="flex flex-col group cursor-pointer bg-[#F3E6D5]/65 hover:bg-[#F3E6D5] border border-[#E6D5C1] hover:border-[#800020]/40 p-5 rounded-[16px] transition-all duration-300 shadow-sm hover:shadow-md"
           >
-            <div className="w-full aspect-[4/5] rounded-[12px] overflow-hidden bg-[#1F040A] mb-5 relative">
+            <div className="w-full aspect-[4/5] rounded-[12px] overflow-hidden bg-[#EAD8C3] mb-5 relative border border-[#E6D5C1]">
               <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKfyZzdNxR6CRmFDsYcN9BFhObZGkrLVs1fKEU_zCTqhc7KR7DOzfD2CBCD73i9XJkzQaS90L1FHwsmZL-_I74FSEtsn7sIZXe822Y316npH82AYut56RoEYdbWc4Z7eFyvZvYnVoYZ9TX1W1X9E_y9KdDdw93qB7F-bDOFI9N6uLmjbEAHCHQ9uYSIX9qXH5K1M0jeyqN31kGI354hwZzK3jGNl3M5tDoceZcRvikMkiS32hWQmfE"
+                src="https://imguser.free.nf/uploads/0_1790441528_6ab7f838f2825_IMG_60512.jpg"
                 alt="Atmospheric festival night at Munnar campus amphitheatre"
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
               />
             </div>
             <div className="flex flex-col flex-1">
-              <h2 className="text-[22px] font-semibold text-[#FFF9F2] mb-1.5 tracking-tight group-hover:text-[#D45060] transition-colors">
+              <h2 className="text-[22px] font-semibold text-[#1F040A] mb-1.5 tracking-tight group-hover:text-[#800020] transition-colors">
                 Video
               </h2>
-              <p className="text-[14px] leading-relaxed text-[#F3E6D5]/80 mb-4">
-                Watch keynote recaps, technical expos, cultural nights, and mountain campus archives.
+              <p className="text-[14px] leading-relaxed text-[#5C3A42] mb-4">
+                Relive the events, celebrations, activities, and moments that shaped life at the College of Engineering Munnar.
               </p>
               <div className="mt-auto pt-1">
-                <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#D45060] group-hover:translate-x-1 transition-all">
+                <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#800020] group-hover:translate-x-1 transition-all">
                   Watch Events <span className="text-sm font-normal">→</span>
                 </span>
               </div>
@@ -136,17 +143,17 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onPlayAudioDirec
               onPlayAudioDirect();
               onNavigate('audio');
             }}
-            className="flex flex-col group cursor-pointer bg-[#140307] border border-[#3A0C16] hover:border-[#800020] p-5 rounded-[16px] transition-all duration-300 shadow-xl"
+            className="flex flex-col group cursor-pointer bg-[#F3E6D5]/65 hover:bg-[#F3E6D5] border border-[#E6D5C1] hover:border-[#800020]/40 p-5 rounded-[16px] transition-all duration-300 shadow-sm hover:shadow-md"
           >
-            <div className="w-full aspect-[4/5] rounded-[12px] bg-[#1F040A] border border-[#3A0C16] mb-5 p-6 flex flex-col justify-between transition-all duration-300 group-hover:bg-[#28050D]">
+            <div className="w-full aspect-[4/5] rounded-[12px] bg-[#FFF9F2] border border-[#E6D5C1] mb-5 p-6 flex flex-col justify-between transition-all duration-300 group-hover:border-[#800020]/30">
               <div className="flex items-center justify-between">
-                <span className="text-[12px] font-medium text-[#F3E6D5]/80 tracking-tight">
-                  Audio Journal
+                <span className="text-[12px] font-semibold text-[#800020] tracking-wider uppercase">
+                  Audio Book
                 </span>
                 <span className="w-2.5 h-2.5 rounded-full bg-[#D45060] animate-pulse"></span>
               </div>
 
-              {/* Dynamic Sound Waveform Graphic in Coral */}
+              {/* Dynamic Sound Waveform Graphic */}
               <div className="my-auto py-4">
                 <svg
                   className="w-full h-24 text-[#800020] group-hover:text-[#D45060] transition-colors duration-300"
@@ -167,7 +174,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onPlayAudioDirec
                   <rect x="80" y="10" width="3" height="40" rx="1.5" fill="currentColor" opacity="0.75"></rect>
                   <rect x="88" y="22" width="3" height="16" rx="1.5" fill="currentColor" opacity="0.4"></rect>
                   <rect x="96" y="14" width="3" height="32" rx="1.5" fill="currentColor" opacity="0.65"></rect>
-                  <rect x="104" y="2" width="3" height="56" rx="currentColor"></rect>
+                  <rect x="104" y="2" width="3" height="56" rx="1.5" fill="currentColor"></rect>
                   <rect x="112" y="16" width="3" height="28" rx="1.5" fill="currentColor" opacity="0.7"></rect>
                   <rect x="120" y="24" width="3" height="12" rx="1.5" fill="currentColor" opacity="0.4"></rect>
                   <rect x="128" y="10" width="3" height="40" rx="1.5" fill="currentColor" opacity="0.8"></rect>
@@ -187,21 +194,20 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onPlayAudioDirec
                 </svg>
               </div>
 
-              <div className="flex items-center justify-between text-[#F3E6D5]/80">
-                <span className="text-[12px] font-medium">ആരണ്യം / Spoken Word</span>
-                <span className="text-[12px] opacity-70 tabular-nums">18:42</span>
+              <div className="text-[12px] text-[#5C3A42] font-medium">
+                Spoken Word · Poetry · Narratives
               </div>
             </div>
 
             <div className="flex flex-col flex-1">
-              <h2 className="text-[22px] font-semibold text-[#FFF9F2] mb-1.5 tracking-tight group-hover:text-[#D45060] transition-colors">
+              <h2 className="text-[22px] font-semibold text-[#1F040A] mb-1.5 tracking-tight group-hover:text-[#800020] transition-colors">
                 Audio
               </h2>
-              <p className="text-[14px] leading-relaxed text-[#F3E6D5]/80 mb-4">
-                Listen to spoken essays, mountain poetry, and environmental conversations.
+              <p className="text-[14px] leading-relaxed text-[#5C3A42] mb-4">
+                Listen to selected articles, poems, stories, and other voices from the pages of Rithu.
               </p>
               <div className="mt-auto pt-1">
-                <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#D45060] group-hover:translate-x-1 transition-all">
+                <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#800020] group-hover:translate-x-1 transition-all">
                   Listen Now <span className="text-sm font-normal">→</span>
                 </span>
               </div>
@@ -212,19 +218,19 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onPlayAudioDirec
 
       {/* Curator's Note Section */}
       <section className="max-w-[1120px] mx-auto w-full px-4 sm:px-6">
-        <div className="bg-[#140307] border border-[#3A0C16] rounded-[16px] p-8 sm:p-12 flex flex-col md:flex-row md:items-baseline justify-between gap-6 shadow-xl">
+        <div className="bg-[#F3E6D5]/70 border border-[#E6D5C1] rounded-[16px] p-8 sm:p-12 flex flex-col md:flex-row md:items-baseline justify-between gap-6 shadow-sm">
           <div className="max-w-xl">
-            <span className="text-[12px] font-medium text-[#D45060] mb-2 block tracking-wider uppercase">
-              Curator's Note
+            <span className="text-[12px] font-semibold text-[#800020] mb-2 block tracking-wider uppercase">
+              STUDENT EDITOR'S NOTE
             </span>
-            <blockquote className="text-[17px] sm:text-[19px] text-[#FFF9F2] font-normal leading-relaxed italic font-serif">
-              "The mist does not obscure the mountains; it grants them their quiet majesty. Here
-              gathered are our seasons in Munnar."
+            <blockquote className="text-[17px] sm:text-[19px] text-[#1F040A] font-normal leading-relaxed italic font-serif">
+              “Every college life is made of seasons — moments of laughter, days of uncertainty, memories we hold on to, and new beginnings we never saw coming. Rithu brings together a few of those moments, just as we lived them.”
             </blockquote>
           </div>
           <div className="text-left md:text-right">
-            <p className="text-[14px] font-semibold text-[#FFF9F2]">Chief Student Editor</p>
-            <p className="text-[12px] text-[#F3E6D5]/70">Editorial Collective 2025–26</p>
+            <p className="text-[14px] font-semibold text-[#1F040A]">Adhil P A</p>
+            <p className="text-[12px] text-[#5C3A42]">Student Editor</p>
+            <p className="text-[12px] text-[#5C3A42]">Rithu · 2026</p>
           </div>
         </div>
       </section>

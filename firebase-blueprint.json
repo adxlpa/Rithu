@@ -105,7 +105,7 @@
         },
         "audioUrl": {
           "type": "string",
-          "description": "Optional URL or encoded audio stream.",
+          "description": "Optional URL, firestore-media reference, or encoded audio stream.",
           "maxLength": 700000
         },
         "isPublic": {
@@ -114,10 +114,16 @@
         },
         "createdByUid": {
           "type": "string",
-          "description": "Firebase Auth UID of the publishing admin.",
+          "description": "UID or identifier of the publishing admin.",
           "minLength": 1,
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "editorialKey": {
+          "type": "string",
+          "description": "Editorial archive verification token.",
+          "minLength": 1,
+          "maxLength": 64
         },
         "createdAt": {
           "type": "string",
@@ -142,6 +148,7 @@
         "description",
         "isPublic",
         "createdByUid",
+        "editorialKey",
         "createdAt",
         "updatedAt"
       ]
@@ -213,8 +220,8 @@
         },
         "videoUrl": {
           "type": "string",
-          "description": "Optional external video stream URL or embed link.",
-          "maxLength": 2000
+          "description": "Optional external video stream URL, firestore-media reference, or embed link.",
+          "maxLength": 700000
         },
         "isPublic": {
           "type": "boolean",
@@ -222,10 +229,16 @@
         },
         "createdByUid": {
           "type": "string",
-          "description": "Firebase Auth UID of the publishing admin.",
+          "description": "UID or identifier of the publishing admin.",
           "minLength": 1,
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "editorialKey": {
+          "type": "string",
+          "description": "Editorial archive verification token.",
+          "minLength": 1,
+          "maxLength": 64
         },
         "createdAt": {
           "type": "string",
@@ -249,6 +262,7 @@
         "imageAlt",
         "isPublic",
         "createdByUid",
+        "editorialKey",
         "createdAt",
         "updatedAt"
       ]
@@ -303,10 +317,16 @@
         },
         "createdByUid": {
           "type": "string",
-          "description": "Firebase Auth UID of the admin who updated the edition.",
+          "description": "UID or identifier of the admin who updated the edition.",
           "minLength": 1,
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "editorialKey": {
+          "type": "string",
+          "description": "Editorial archive verification token.",
+          "minLength": 1,
+          "maxLength": 64
         },
         "createdAt": {
           "type": "string",
@@ -328,13 +348,14 @@
         "sourceType",
         "isPublic",
         "createdByUid",
+        "editorialKey",
         "createdAt",
         "updatedAt"
       ]
     },
     "MagazinePage": {
       "title": "MagazinePage",
-      "description": "Individual rendered page of a custom PDF magazine edition stored as a separate document to stay well within Firestore's 1MB limit.",
+      "description": "Individual rendered page of a custom PDF magazine edition stored as a separate document.",
       "type": "object",
       "properties": {
         "id": {
@@ -384,10 +405,16 @@
         },
         "createdByUid": {
           "type": "string",
-          "description": "Firebase Auth UID of the publishing admin.",
+          "description": "UID or identifier of the publishing admin.",
           "minLength": 1,
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "editorialKey": {
+          "type": "string",
+          "description": "Editorial archive verification token.",
+          "minLength": 1,
+          "maxLength": 64
         },
         "createdAt": {
           "type": "string",
@@ -410,6 +437,81 @@
         "pdfImageUrl",
         "isPublic",
         "createdByUid",
+        "editorialKey",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "MediaChunk": {
+      "title": "MediaChunk",
+      "description": "Chunked binary data segment for uploaded audio or video files stored in Firestore.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Chunk document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "mediaId": {
+          "type": "string",
+          "description": "Parent media asset identifier.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "chunkIndex": {
+          "type": "integer",
+          "description": "Zero-based index of this chunk."
+        },
+        "totalChunks": {
+          "type": "integer",
+          "description": "Total chunks for this media asset."
+        },
+        "data": {
+          "type": "string",
+          "description": "Base64 / Data URL slice for this chunk.",
+          "minLength": 1,
+          "maxLength": 800000
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Whether this media chunk is publicly streamable."
+        },
+        "createdByUid": {
+          "type": "string",
+          "description": "UID or identifier of the uploading admin.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "editorialKey": {
+          "type": "string",
+          "description": "Editorial archive verification token.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "mediaId",
+        "chunkIndex",
+        "totalChunks",
+        "data",
+        "isPublic",
+        "createdByUid",
+        "editorialKey",
         "createdAt",
         "updatedAt"
       ]
@@ -435,6 +537,10 @@
     "/magazine_pages/{pageId}": {
       "schema": { "$ref": "#/entities/MagazinePage" },
       "description": "Individual rendered PDF magazine pages linked to an active magazine_edition."
+    },
+    "/media_chunks/{chunkId}": {
+      "schema": { "$ref": "#/entities/MediaChunk" },
+      "description": "Chunked binary media storage for uploaded audio and video files."
     }
   }
 }

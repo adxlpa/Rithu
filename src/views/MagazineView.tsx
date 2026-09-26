@@ -569,23 +569,23 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
   };
 
   return (
-    <div className="w-full min-h-[calc(100vh-4rem)] flex flex-col bg-[#0E0205] text-[#FFF9F2] animate-fadeIn select-none">
+    <div className="w-full min-h-[calc(100vh-4rem)] flex flex-col bg-[#F8EFE4] text-[#1F040A] animate-fadeIn select-none">
       {/* Ambient Top Bar */}
-      <header className="w-full z-30 px-4 sm:px-6 py-2.5 bg-[#140307]/95 backdrop-blur-md border-b border-[#3A0C16] flex items-center justify-between">
+      <header className="w-full z-30 px-4 sm:px-6 py-2.5 bg-[#FFF9F2]/95 backdrop-blur-md border-b border-[#E6D5C1] flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => onNavigate('home')}
-            className="flex items-center gap-1.5 text-[13px] text-[#F3E6D5]/80 hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-[13px] text-[#5C3A42] hover:text-[#1F040A] transition-colors cursor-pointer"
           >
             <span className="material-symbols-outlined text-[18px]">arrow_back</span>
             <span className="hidden sm:inline">Home</span>
           </button>
-          <div className="h-4 w-[1px] bg-[#3A0C16]"></div>
+          <div className="h-4 w-[1px] bg-[#E6D5C1]"></div>
           <div className="flex flex-col">
-            <span className="text-[13px] sm:text-[14px] font-semibold text-[#FFF9F2] leading-tight">
+            <span className="text-[13px] sm:text-[14px] font-semibold text-[#1F040A] leading-tight">
               {editionInfo.title || 'Rithu Magazine'}
             </span>
-            <span className="text-[11px] text-[#D45060]">
+            <span className="text-[11px] text-[#800020] font-medium">
               {effectiveSinglePage
                 ? `Page ${mobilePageIndex + 1} of ${totalPages}`
                 : desktopStep === 0
@@ -604,7 +604,7 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
               if (onOpenAdminUpload) onOpenAdminUpload();
               else onNavigate('admin-portal');
             }}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#800020]/30 hover:bg-[#800020]/60 text-[#D45060] border border-[#800020]/60 text-[12px] font-medium transition-colors cursor-pointer mr-1"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#F3E6D5] hover:bg-[#800020] text-[#800020] hover:text-[#FFF9F2] border border-[#800020]/30 text-[12px] font-medium transition-colors cursor-pointer mr-1"
             title="Upload or Change Magazine PDF in Admin"
           >
             <span className="material-symbols-outlined text-[16px]">picture_as_pdf</span>
@@ -617,7 +617,7 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                 forceSinglePage
                   ? 'bg-[#800020] text-[#FFF9F2]'
-                  : 'text-[#F3E6D5]/80 hover:text-white hover:bg-[#24070D]'
+                  : 'text-[#5C3A42] hover:text-[#1F040A] hover:bg-[#F3E6D5]'
               }`}
               title={forceSinglePage ? 'Switch to Dual Spread' : 'Switch to Single Page'}
             >
@@ -632,7 +632,7 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
             className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
               isZoomed
                 ? 'bg-[#800020] text-[#FFF9F2]'
-                : 'text-[#F3E6D5]/80 hover:text-white hover:bg-[#24070D]'
+                : 'text-[#5C3A42] hover:text-[#1F040A] hover:bg-[#F3E6D5]'
             }`}
             title="Inspect Scale"
           >
@@ -643,7 +643,7 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
 
           <button
             onClick={toggleFullscreen}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-[#F3E6D5]/80 hover:text-white hover:bg-[#24070D] transition-all cursor-pointer"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-[#5C3A42] hover:text-[#1F040A] hover:bg-[#F3E6D5] transition-all cursor-pointer"
             title="Toggle Fullscreen"
           >
             <span className="material-symbols-outlined text-[19px]">fullscreen</span>
@@ -661,10 +661,10 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
           onClick={turnPrev}
           disabled={!canGoPrev}
           aria-label="Previous Page"
-          className={`absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-xl cursor-pointer ${
+          className={`absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-md cursor-pointer ${
             !canGoPrev
-              ? 'opacity-20 cursor-not-allowed text-[#F3E6D5]/30'
-              : 'text-[#FFF9F2] bg-[#1F040A]/95 hover:bg-[#800020] hover:scale-105 active:scale-95 border border-[#800020]/50'
+              ? 'opacity-25 cursor-not-allowed text-[#5C3A42]/40 bg-[#FFF9F2]/60'
+              : 'text-[#1F040A] bg-[#FFF9F2] hover:bg-[#800020] hover:text-[#FFF9F2] hover:scale-105 active:scale-95 border border-[#E6D5C1]'
           }`}
         >
           <span className="material-symbols-outlined text-[26px]">chevron_left</span>
@@ -1021,10 +1021,10 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
           onClick={turnNext}
           disabled={!canGoNext}
           aria-label="Next Page"
-          className={`absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-xl cursor-pointer ${
+          className={`absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-md cursor-pointer ${
             !canGoNext
-              ? 'opacity-20 cursor-not-allowed text-[#F3E6D5]/30'
-              : 'text-[#FFF9F2] bg-[#1F040A]/95 hover:bg-[#800020] hover:scale-105 active:scale-95 border border-[#800020]/50'
+              ? 'opacity-25 cursor-not-allowed text-[#5C3A42]/40 bg-[#FFF9F2]/60'
+              : 'text-[#1F040A] bg-[#FFF9F2] hover:bg-[#800020] hover:text-[#FFF9F2] hover:scale-105 active:scale-95 border border-[#E6D5C1]'
           }`}
         >
           <span className="material-symbols-outlined text-[26px]">chevron_right</span>
@@ -1032,7 +1032,7 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
       </div>
 
       {/* Interactive Bottom Control & Thumbnail Strip */}
-      <footer className="w-full z-30 pb-4 pt-2.5 bg-[#140307]/95 backdrop-blur-md border-t border-[#3A0C16]">
+      <footer className="w-full z-30 pb-4 pt-2.5 bg-[#FFF9F2]/95 backdrop-blur-md border-t border-[#E6D5C1]">
         <div className="max-w-[1120px] mx-auto px-4 sm:px-6 flex flex-col gap-2.5">
           {/* Thumbnails strip */}
           <div className="flex items-center gap-2.5 sm:gap-3.5 overflow-x-auto py-1 scroll-smooth no-scrollbar">
@@ -1048,14 +1048,14 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
               }}
               className={`flex-shrink-0 flex items-center rounded p-1 transition-all cursor-pointer ${
                 (effectiveSinglePage ? mobilePageIndex === 0 : desktopStep === 0)
-                  ? 'bg-[#24070D] ring-2 ring-[#D45060] shadow-sm'
-                  : 'bg-[#180408] opacity-50 hover:opacity-100'
+                  ? 'bg-[#F3E6D5] ring-2 ring-[#800020] shadow-xs'
+                  : 'bg-[#F8EFE4] opacity-70 hover:opacity-100'
               }`}
             >
-              <div className="w-8 h-10 bg-[#160408] rounded border border-[#800020]/60 flex items-center justify-center">
-                <span className="text-[8px] font-bold text-[#D45060]">COVER</span>
+              <div className="w-8 h-10 bg-[#800020] rounded border border-[#800020] flex items-center justify-center">
+                <span className="text-[8px] font-bold text-[#FFF9F2]">COVER</span>
               </div>
-              <span className="ml-2 text-[11px] sm:text-[12px] font-medium pr-1 text-[#F3E6D5]/80">
+              <span className="ml-2 text-[11px] sm:text-[12px] font-medium pr-1 text-[#1F040A]">
                 Front
               </span>
             </button>
@@ -1082,16 +1082,16 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
                   }}
                   className={`flex-shrink-0 flex items-center rounded p-1 transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-[#24070D] ring-2 ring-[#D45060] shadow-sm'
-                      : 'bg-[#180408] opacity-50 hover:opacity-100'
+                      ? 'bg-[#F3E6D5] ring-2 ring-[#800020] shadow-xs'
+                      : 'bg-[#F8EFE4] opacity-70 hover:opacity-100'
                   }`}
                 >
-                  <div className="w-12 h-10 bg-[#FFF9F2] rounded border border-[#3A0C16] flex items-center justify-center gap-1 text-[9px] font-mono text-[#140A0C]">
+                  <div className="w-12 h-10 bg-white rounded border border-[#E6D5C1] flex items-center justify-center gap-1 text-[9px] font-mono text-[#1F040A]">
                     <span>{leftNum}</span>
                     <span className="opacity-40">|</span>
                     <span>{rightNum}</span>
                   </div>
-                  <span className="ml-2 text-[11px] sm:text-[12px] font-medium pr-1 text-[#F3E6D5]/80">
+                  <span className="ml-2 text-[11px] sm:text-[12px] font-medium pr-1 text-[#1F040A]">
                     {leftNum}–{rightNum}
                   </span>
                 </button>
@@ -1110,14 +1110,14 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
               }}
               className={`flex-shrink-0 flex items-center rounded p-1 transition-all cursor-pointer ${
                 (effectiveSinglePage ? mobilePageIndex === totalPages - 1 : desktopStep === maxDesktopStep)
-                  ? 'bg-[#24070D] ring-2 ring-[#D45060] shadow-sm'
-                  : 'bg-[#180408] opacity-50 hover:opacity-100'
+                  ? 'bg-[#F3E6D5] ring-2 ring-[#800020] shadow-xs'
+                  : 'bg-[#F8EFE4] opacity-70 hover:opacity-100'
               }`}
             >
-              <div className="w-8 h-10 bg-[#160408] rounded border border-[#800020]/60 flex items-center justify-center">
-                <span className="text-[8px] font-bold text-[#D45060]">BACK</span>
+              <div className="w-8 h-10 bg-[#800020] rounded border border-[#800020] flex items-center justify-center">
+                <span className="text-[8px] font-bold text-[#FFF9F2]">BACK</span>
               </div>
-              <span className="ml-2 text-[11px] sm:text-[12px] font-medium pr-1 text-[#F3E6D5]/80">
+              <span className="ml-2 text-[11px] sm:text-[12px] font-medium pr-1 text-[#1F040A]">
                 Back
               </span>
             </button>
