@@ -136,7 +136,6 @@ export const AudioView: React.FC<AudioViewProps> = ({
                     <div className="flex items-center gap-2 text-[13px] text-[#5C3A42] mt-0.5 flex-wrap">
                       <span>{track.author}</span>
                       <span className="text-[#800020]">·</span>
-                      <span className="capitalize">{track.category}</span>
                       <span className="text-[#800020]">·</span>
                       <span className="tabular-nums">{track.duration}</span>
                     </div>
