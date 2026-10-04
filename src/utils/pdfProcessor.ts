@@ -1,5 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import { MagazinePage } from '../types';
+import { MagazinePage, MagazineEditionInfo } from '../types';
 import { DEFAULT_MAGAZINE_PAGES } from '../data/initialData';
 
 try {
@@ -35,27 +35,70 @@ export async function findBundledDefaultPdfUrl(): Promise<string | null> {
   if (srcPdfUrls.length > 0 && typeof srcPdfUrls[0] === 'string') {
     return srcPdfUrls[0];
   }
+  return null;
+}
+
+export async function loadServerDefaultPdfManifest(): Promise<{
+  pages: MagazinePage[];
+  edition: MagazineEditionInfo;
+} | null> {
   try {
-    const res = await fetch('/rithu-magazine.pdf', { method: 'HEAD', cache: 'no-store' });
+    const res = await fetch(`pdf-pages/manifest.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return null;
     const contentType = res.headers.get('content-type') || '';
-    if (res.ok && contentType.toLowerCase().includes('pdf')) {
-      return '/rithu-magazine.pdf';
+    if (!contentType.toLowerCase().includes('json')) return null;
+    const data = await res.json();
+    if (
+      data &&
+      Array.isArray(data.pages) &&
+      data.pages.length > 0 &&
+      data.edition &&
+      data.edition.sourceType === 'pdf'
+    ) {
+      return {
+        pages: data.pages,
+        edition: data.edition,
+      };
     }
   } catch {
-    // No static PDF in /public yet
+    // No manifest on server yet
   }
   return null;
 }
 
-export async function savePdfAsPermanentDefault(file: File): Promise<boolean> {
+export async function syncRenderedPagesToPublicServer(
+  pages: MagazinePage[],
+  edition: MagazineEditionInfo,
+  onProgress?: (percent: number) => void
+): Promise<boolean> {
   try {
-    const buf = await file.arrayBuffer();
-    const res = await fetch('/api/save-default-pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/pdf' },
-      body: buf,
-    });
-    return res.ok;
+    const validPages = pages.filter((p) => p.pdfImageUrl && p.pdfImageUrl.startsWith('data:'));
+    if (validPages.length === 0) return false;
+
+    for (let i = 0; i < validPages.length; i++) {
+      const p = validPages[i];
+      const res = await fetch('/api/save-pdf-page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pageIndex: i,
+          totalPages: validPages.length,
+          dataUrl: p.pdfImageUrl,
+          reset: i === 0,
+          isLast: i === validPages.length - 1,
+          edition: {
+            ...edition,
+            totalPages: validPages.length,
+            sourceType: 'pdf',
+          },
+        }),
+      });
+      if (!res.ok) return false;
+      if (onProgress) {
+        onProgress(Math.round(((i + 1) / validPages.length) * 100));
+      }
+    }
+    return true;
   } catch {
     return false;
   }
@@ -63,7 +106,7 @@ export async function savePdfAsPermanentDefault(file: File): Promise<boolean> {
 
 export async function deletePermanentDefaultPdf(): Promise<void> {
   try {
-    await fetch('/api/save-default-pdf', { method: 'DELETE' });
+    await fetch('/api/save-pdf-page', { method: 'DELETE' });
   } catch {
     // Ignore
   }
@@ -101,7 +144,7 @@ export async function renderPdfFileToMagazinePages(
     const page = await pdf.getPage(pageNum);
     const baseViewport = page.getViewport({ scale: 1 });
     const maxDim = Math.max(baseViewport.width, baseViewport.height, 1);
-    const scale = Math.min(1.75, Math.max(0.95, 1380 / maxDim));
+    const scale = Math.min(1.5, Math.max(0.85, 1180 / maxDim));
     const viewport = page.getViewport({ scale });
 
     const canvas = document.createElement('canvas');
@@ -121,12 +164,12 @@ export async function renderPdfFileToMagazinePages(
       canvas,
     } as Parameters<typeof page.render>[0]).promise;
 
-    let dataUrl = canvas.toDataURL('image/jpeg', 0.84);
-    if (dataUrl.length > 580000) {
-      dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+    let dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+    if (dataUrl.length > 350000) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.65);
     }
-    if (dataUrl.length > 580000) {
-      dataUrl = canvas.toDataURL('image/jpeg', 0.58);
+    if (dataUrl.length > 350000) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.52);
     }
 
     const isCover = pageNum === 1;

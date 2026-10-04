@@ -41,8 +41,9 @@ import {
 } from './firebase';
 import {
   findBundledDefaultPdfUrl,
+  loadServerDefaultPdfManifest,
   renderPdfFileToMagazinePages,
-  savePdfAsPermanentDefault,
+  syncRenderedPagesToPublicServer,
   PdfRenderProgress,
 } from './utils/pdfProcessor';
 import { Navbar } from './components/Navbar';
@@ -113,7 +114,6 @@ export function App() {
     try {
       setIsUploadingPdf(true);
       setPdfUploadProgress({ currentPage: 0, totalPages: 0, percent: 0 });
-      await savePdfAsPermanentDefault(file);
 
       const editionTitle = file.name.replace(/\.[^/.]+$/, '') || 'Rithu — College Magazine';
       const renderedPages = await renderPdfFileToMagazinePages(
@@ -146,10 +146,17 @@ export function App() {
       setMagazinePages(renderedPages);
       setMagazineEdition(finalEdition);
       await savePersistedMagazine(renderedPages, finalEdition);
+      await syncRenderedPagesToPublicServer(renderedPages, finalEdition, (pct) =>
+        setPdfUploadProgress({
+          currentPage: Math.round((pct / 100) * renderedPages.length),
+          totalPages: renderedPages.length,
+          percent: pct,
+        })
+      );
       setIsUploadingPdf(false);
       setPdfUploadProgress(null);
       showToast(
-        `Set "${file.name}" (${renderedPages.length} pages) as the permanent default PDF magazine!`
+        `Published "${file.name}" (${renderedPages.length} pages) for all public users!`
       );
       syncMagazineToCloud(renderedPages, finalEdition).catch(() => {});
     } catch (err) {
@@ -184,7 +191,24 @@ export function App() {
           if (edImg) setEditorialBoardImage(edImg);
           setIsHydrated(true);
 
-          if (mag.edition.sourceType !== 'pdf') {
+          const serverManifest = await loadServerDefaultPdfManifest();
+          if (serverManifest && active) {
+            if (mag.edition.sourceType !== 'pdf') {
+              setMagazinePages(serverManifest.pages);
+              setMagazineEdition(serverManifest.edition);
+            }
+          } else if (
+            mag.edition.sourceType === 'pdf' &&
+            mag.pages.length > 0 &&
+            mag.pages[0]?.pdfImageUrl?.startsWith('data:')
+          ) {
+            // Automatically publish existing IndexedDB PDF pages to /public/pdf-pages/ so all other users see the PDF!
+            syncRenderedPagesToPublicServer(mag.pages, mag.edition).then((ok) => {
+              if (ok && active) {
+                showToast('Synced your uploaded PDF to public storage for all visitors!');
+              }
+            });
+          } else if (mag.edition.sourceType !== 'pdf') {
             const bundledPdfUrl = await findBundledDefaultPdfUrl();
             if (bundledPdfUrl && active) {
               setIsUploadingPdf(true);
@@ -222,6 +246,7 @@ export function App() {
                   setMagazinePages(rendered);
                   setMagazineEdition(pdfEdition);
                   await savePersistedMagazine(rendered, pdfEdition);
+                  await syncRenderedPagesToPublicServer(rendered, pdfEdition);
                 }
               } catch (e) {
                 console.warn('Could not load bundled default PDF:', e);

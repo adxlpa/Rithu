@@ -9,7 +9,7 @@ import {
 import {
   renderPdfFileToMagazinePages,
   generateSamplePdfMagazinePages,
-  savePdfAsPermanentDefault,
+  syncRenderedPagesToPublicServer,
   deletePermanentDefaultPdf,
   PdfRenderProgress,
 } from '../utils/pdfProcessor';
@@ -181,7 +181,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
         setIsProcessingPdf(true);
         setCloudSyncPercent(null);
         setPdfProgress({ currentPage: 0, totalPages: 0, percent: 0 });
-        await savePdfAsPermanentDefault(file);
         const renderedPages = await renderPdfFileToMagazinePages(file, (prog) =>
           setPdfProgress(prog)
         );
@@ -195,6 +194,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
           updatedAt: 'Synced via Firebase',
         };
         setCloudSyncPercent(0);
+        await syncRenderedPagesToPublicServer(renderedPages, newEdition, (pct) =>
+          setCloudSyncPercent(pct)
+        );
         await onUpdateMagazinePages(renderedPages, newEdition, (pct) => setCloudSyncPercent(pct));
         setIsProcessingPdf(false);
         setPdfProgress(null);

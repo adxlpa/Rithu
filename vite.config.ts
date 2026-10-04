@@ -8,24 +8,70 @@ function saveDefaultPdfPlugin(): Plugin {
   return {
     name: 'save-default-pdf-plugin',
     configureServer(server) {
-      server.middlewares.use('/api/save-default-pdf', (req, res) => {
-        const publicPdfPath = path.resolve(__dirname, 'public/rithu-magazine.pdf');
+      server.middlewares.use('/api/save-pdf-page', (req, res) => {
+        const pdfPagesDir = path.resolve(__dirname, 'public/pdf-pages');
+        const manifestPath = path.resolve(pdfPagesDir, 'manifest.json');
+
         if (req.method === 'POST') {
           const chunks: Buffer[] = [];
           req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
           req.on('end', () => {
             try {
-              const buffer = Buffer.concat(chunks);
-              if (buffer.length < 100) {
-                res.statusCode = 400;
-                res.end(JSON.stringify({error: 'Empty or invalid PDF payload'}));
-                return;
+              const bodyStr = Buffer.concat(chunks).toString('utf8');
+              const payload = JSON.parse(bodyStr);
+
+              fs.mkdirSync(pdfPagesDir, {recursive: true});
+
+              if (payload.reset) {
+                if (fs.existsSync(pdfPagesDir)) {
+                  for (const f of fs.readdirSync(pdfPagesDir)) {
+                    fs.unlinkSync(path.join(pdfPagesDir, f));
+                  }
+                }
               }
-              fs.mkdirSync(path.dirname(publicPdfPath), {recursive: true});
-              fs.writeFileSync(publicPdfPath, buffer);
+
+              const pageNum = Number(payload.pageIndex) + 1;
+              const totalPages = Number(payload.totalPages) || 74;
+              const dataUrl: string = payload.dataUrl || '';
+              const base64Part = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+
+              if (base64Part) {
+                const imgBuffer = Buffer.from(base64Part, 'base64');
+                fs.writeFileSync(path.join(pdfPagesDir, `page-${pageNum}.jpg`), imgBuffer);
+              }
+
+              if (payload.isLast || pageNum === totalPages) {
+                const pagesList = [];
+                for (let i = 1; i <= totalPages; i++) {
+                  const isCover = i === 1;
+                  const isBack = i === totalPages;
+                  pagesList.push({
+                    id: `pdf-page-${i}`,
+                    pageNumber: i - 1,
+                    type: isCover ? 'cover' : isBack ? 'back-cover' : 'content',
+                    title: isCover ? 'Cover' : isBack ? 'Back Cover' : `Page ${i}`,
+                    subtitle: `PDF Page ${i} of ${totalPages}`,
+                    pdfImageUrl: `pdf-pages/page-${i}.jpg`,
+                  });
+                }
+                const manifest = {
+                  edition: payload.edition || {
+                    title: 'Rithu — College Magazine',
+                    year: '2026',
+                    institution: 'College of Engineering Munnar',
+                    totalPages,
+                    sourceType: 'pdf',
+                    fileName: 'Rithu_Magazine.pdf',
+                    updatedAt: 'Published PDF Edition',
+                  },
+                  pages: pagesList,
+                };
+                fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+              }
+
               res.setHeader('Content-Type', 'application/json');
               res.statusCode = 200;
-              res.end(JSON.stringify({ok: true, path: '/rithu-magazine.pdf', bytes: buffer.length}));
+              res.end(JSON.stringify({ok: true, pageNum}));
             } catch (err) {
               res.statusCode = 500;
               res.end(JSON.stringify({error: String(err)}));
@@ -33,10 +79,13 @@ function saveDefaultPdfPlugin(): Plugin {
           });
           return;
         }
+
         if (req.method === 'DELETE') {
           try {
-            if (fs.existsSync(publicPdfPath)) {
-              fs.unlinkSync(publicPdfPath);
+            if (fs.existsSync(pdfPagesDir)) {
+              for (const f of fs.readdirSync(pdfPagesDir)) {
+                fs.unlinkSync(path.join(pdfPagesDir, f));
+              }
             }
             res.setHeader('Content-Type', 'application/json');
             res.statusCode = 200;
@@ -47,6 +96,7 @@ function saveDefaultPdfPlugin(): Plugin {
           }
           return;
         }
+
         res.statusCode = 405;
         res.end();
       });
