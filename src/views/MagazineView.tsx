@@ -7,6 +7,9 @@ interface MagazineViewProps {
   editionInfo: MagazineEditionInfo;
   onNavigate: (view: ViewMode) => void;
   onOpenAdminUpload?: () => void;
+  onUploadDirectPdf?: (file: File) => Promise<void>;
+  isUploadingPdf?: boolean;
+  pdfUploadProgress?: { currentPage: number; totalPages: number; percent: number } | null;
 }
 
 function escapeHtml(str?: string): string {
@@ -23,6 +26,9 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
   editionInfo,
   onNavigate,
   onOpenAdminUpload,
+  onUploadDirectPdf,
+  isUploadingPdf = false,
+  pdfUploadProgress = null,
 }) => {
   // Master container & DOM refs
   const stageRef = useRef<HTMLDivElement>(null);
@@ -1696,17 +1702,48 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <button
-            onClick={() => {
-              if (onOpenAdminUpload) onOpenAdminUpload();
-              else onNavigate('admin-portal');
-            }}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#F3E6D5] hover:bg-[#800020] text-[#800020] hover:text-[#FFF9F2] border border-[#800020]/30 text-[11px] sm:text-[12px] font-medium transition-colors cursor-pointer mr-1 shadow-xs"
-            title="Manage Magazine Pages & Photos in Admin"
-          >
-            <span className="material-symbols-outlined text-[16px]">photo_library</span>
-            <span className="hidden sm:inline">Manage Pages</span>
-          </button>
+          {onUploadDirectPdf && (
+            <label
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#800020] hover:bg-[#660019] text-[#FFF9F2] text-[11px] sm:text-[12px] font-semibold transition-colors cursor-pointer shadow-xs"
+              title="Select your PDF file to display as exact PDF pages and set as permanent default"
+            >
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                className="sr-only"
+                disabled={isUploadingPdf}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onUploadDirectPdf(file);
+                    e.target.value = '';
+                  }
+                }}
+              />
+              <span className="material-symbols-outlined text-[16px]">picture_as_pdf</span>
+              <span>
+                {isUploadingPdf
+                  ? `Loading PDF (${pdfUploadProgress?.percent || 0}%)...`
+                  : editionInfo.sourceType === 'pdf'
+                  ? 'Replace Default PDF'
+                  : 'Upload Default PDF'}
+              </span>
+            </label>
+          )}
+
+          {onUploadDirectPdf && (
+            <button
+              onClick={() => {
+                if (onOpenAdminUpload) onOpenAdminUpload();
+                else onNavigate('admin-portal');
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#F3E6D5] hover:bg-[#800020] text-[#800020] hover:text-[#FFF9F2] border border-[#800020]/30 text-[11px] sm:text-[12px] font-medium transition-colors cursor-pointer mr-1 shadow-xs"
+              title="Manage Magazine Pages & Photos in Admin"
+            >
+              <span className="material-symbols-outlined text-[16px]">photo_library</span>
+              <span className="hidden sm:inline">Manage Pages</span>
+            </button>
+          )}
 
           <button
             onClick={() => setIsThumbDrawerOpen(!isThumbDrawerOpen)}
@@ -1833,8 +1870,28 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
       {/* Main Flipbook Stage */}
       <div
         ref={stageRef}
+        onDragOver={(e) => {
+          e.preventDefault();
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const file = e.dataTransfer?.files?.[0];
+          if (file && file.name.toLowerCase().endsWith('.pdf') && onUploadDirectPdf) {
+            onUploadDirectPdf(file);
+          }
+        }}
         className="relative w-full flex-1 flex items-center justify-center overflow-hidden book-perspective"
       >
+        {/* Progress Pill */}
+        {isUploadingPdf && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 bg-[#FFF9F2]/95 backdrop-blur-md border border-[#800020]/30 px-4 py-2 rounded-full shadow-lg flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-[#800020] border-t-transparent rounded-full animate-spin" />
+            <span className="text-[12px] sm:text-[13px] font-semibold text-[#1F040A]">
+              Rendering exact PDF pages ({pdfUploadProgress?.currentPage || 0} /{' '}
+              {pdfUploadProgress?.totalPages || '?'}) — {pdfUploadProgress?.percent || 0}%
+            </span>
+          </div>
+        )}
         <button
           onClick={() => flipPage(-1)}
           disabled={!canGoPrev}

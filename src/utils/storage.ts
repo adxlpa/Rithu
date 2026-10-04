@@ -9,6 +9,7 @@ import {
   query,
   where,
   writeBatch,
+  serverTimestamp,
 } from 'firebase/firestore';
 import {
   db,
@@ -178,10 +179,22 @@ export async function loadPersistedMagazine(): Promise<{
   if (
     pages !== null &&
     Array.isArray(pages) &&
-    pages.length >= DEFAULT_MAGAZINE_PAGES.length &&
-    edition !== null
+    pages.length > 0 &&
+    edition !== null &&
+    (edition.sourceType === 'pdf' || pages.length >= DEFAULT_MAGAZINE_PAGES.length)
   ) {
     return { pages, edition };
+  }
+  const legacyPages = await getItem<MagazinePage[]>(STORE_MAGAZINE, 'pages');
+  const legacyEdition = await getItem<MagazineEditionInfo>(STORE_MAGAZINE, 'edition');
+  if (
+    legacyPages !== null &&
+    Array.isArray(legacyPages) &&
+    legacyPages.length > 0 &&
+    legacyEdition !== null &&
+    legacyEdition.sourceType === 'pdf'
+  ) {
+    return { pages: legacyPages, edition: legacyEdition };
   }
   return {
     pages: DEFAULT_MAGAZINE_PAGES,
@@ -252,28 +265,30 @@ export async function uploadMediaToFirestore(
 
   const chunkSize = 680000;
   const totalChunks = Math.ceil(dataUrl.length / chunkSize);
+  if (totalChunks > 95) {
+    throw new Error('File exceeds maximum cloud vault size (~45 MB). Please compress the file.');
+  }
   const uid = getCurrentUid();
-  const nowIso = new Date().toISOString();
 
   for (let i = 0; i < totalChunks; i++) {
     if (isCloudQuotaReached()) break;
     const chunkData = dataUrl.slice(i * chunkSize, (i + 1) * chunkSize);
-    const chunkId = sanitizeId(`${mediaId}_c${i}`);
+    const chunkId = sanitizeId(`${mediaId}-c-${i}`);
     try {
       await setDoc(doc(db, 'media_chunks', chunkId), {
         id: chunkId,
         mediaId,
         chunkIndex: i,
         totalChunks,
-        mimeType: clampString(file.type, 100, 'application/octet-stream'),
         data: chunkData,
         isPublic: true,
         createdByUid: uid,
         editorialKey: EDITORIAL_KEY,
-        createdAt: nowIso,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `media_chunks/${chunkId}`);
+      handleFirestoreError(error, OperationType.CREATE, `media_chunks/${chunkId}`);
       break;
     }
     if (onProgress) {
@@ -336,7 +351,6 @@ async function deleteMediaChunks(url: string | undefined): Promise<void> {
 
 function buildAudioPayload(track: AudioTrack, uid: string, isUpdate = false) {
   const docId = sanitizeId(track.id);
-  const nowIso = new Date().toISOString();
   const payload: Record<string, unknown> = {
     title: clampString(track.title, 200, 'Untitled Audio'),
     author: clampString(track.author, 120, 'Editorial Contributor'),
@@ -358,12 +372,12 @@ function buildAudioPayload(track: AudioTrack, uid: string, isUpdate = false) {
     ),
     isPublic: true,
     editorialKey: EDITORIAL_KEY,
-    updatedAt: nowIso,
+    updatedAt: serverTimestamp(),
   };
   if (!isUpdate) {
     payload.id = docId;
     payload.createdByUid = sanitizeId(uid);
-    payload.createdAt = nowIso;
+    payload.createdAt = serverTimestamp();
   }
   if (track.englishSubtitle && track.englishSubtitle.trim()) {
     payload.englishSubtitle = clampString(track.englishSubtitle, 200);
@@ -379,7 +393,6 @@ function buildAudioPayload(track: AudioTrack, uid: string, isUpdate = false) {
 
 function buildVideoPayload(video: VideoItem, uid: string, isUpdate = false) {
   const docId = sanitizeId(video.id);
-  const nowIso = new Date().toISOString();
   const payload: Record<string, unknown> = {
     title: clampString(video.title, 200, 'Untitled Video'),
     dateStr: clampString(video.dateStr, 50, 'Feb 2026'),
@@ -395,12 +408,12 @@ function buildVideoPayload(video: VideoItem, uid: string, isUpdate = false) {
     imageAlt: clampString(video.imageAlt || video.title, 200, 'Video Poster'),
     isPublic: true,
     editorialKey: EDITORIAL_KEY,
-    updatedAt: nowIso,
+    updatedAt: serverTimestamp(),
   };
   if (!isUpdate) {
     payload.id = docId;
     payload.createdByUid = sanitizeId(uid);
-    payload.createdAt = nowIso;
+    payload.createdAt = serverTimestamp();
   }
   if (typeof video.isFeatured === 'boolean') {
     payload.isFeatured = video.isFeatured;
@@ -457,19 +470,14 @@ export function subscribeToCloudContent(callbacks: {
 
   const emitMagazineIfReady = () => {
     if (!latestEdition) return;
-    if (latestEdition.sourceType === 'curated') {
-      callbacks.onMagazine(DEFAULT_MAGAZINE_PAGES, INITIAL_MAGAZINE_EDITION);
-      savePersistedMagazine(DEFAULT_MAGAZINE_PAGES, INITIAL_MAGAZINE_EDITION);
-    } else if (
+    if (
+      latestEdition.sourceType === 'pdf' &&
       latestPages.length > 0 &&
-      latestPages.length === latestEdition.totalPages &&
-      latestEdition.totalPages >= DEFAULT_MAGAZINE_PAGES.length
+      latestPages.length === latestEdition.totalPages
     ) {
       const sorted = [...latestPages].sort((a, b) => a.pageNumber - b.pageNumber);
       callbacks.onMagazine(sorted, latestEdition);
       savePersistedMagazine(sorted, latestEdition);
-    } else {
-      callbacks.onMagazine(DEFAULT_MAGAZINE_PAGES, INITIAL_MAGAZINE_EDITION);
     }
   };
 
@@ -739,7 +747,6 @@ export async function syncMagazineToCloud(
 ): Promise<void> {
   if (isCloudQuotaReached()) return;
   const uid = getCurrentUid();
-  const nowIso = new Date().toISOString();
 
   try {
     const existingSnap = await getDocs(
@@ -764,8 +771,8 @@ export async function syncMagazineToCloud(
       isPublic: true,
       createdByUid: uid,
       editorialKey: EDITORIAL_KEY,
-      createdAt: nowIso,
-      updatedAt: nowIso,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     };
     if (edition.fileName && edition.fileName.trim()) {
       editionPayload.fileName = clampString(edition.fileName, 255);
@@ -794,8 +801,8 @@ export async function syncMagazineToCloud(
               isPublic: true,
               createdByUid: uid,
               editorialKey: EDITORIAL_KEY,
-              createdAt: nowIso,
-              updatedAt: nowIso,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
             };
             await setDoc(doc(db, 'magazine_pages', pageId), pagePayload);
           })
@@ -814,7 +821,6 @@ export async function syncMagazineToCloud(
 export async function resetCloudMagazineToDefault(): Promise<void> {
   if (isCloudQuotaReached()) return;
   const uid = getCurrentUid();
-  const nowIso = new Date().toISOString();
   try {
     const existingSnap = await getDocs(
       query(collection(db, 'magazine_pages'), where('isPublic', '==', true))
@@ -836,8 +842,8 @@ export async function resetCloudMagazineToDefault(): Promise<void> {
       isPublic: true,
       createdByUid: uid,
       editorialKey: EDITORIAL_KEY,
-      createdAt: nowIso,
-      updatedAt: nowIso,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'magazine_edition/current');

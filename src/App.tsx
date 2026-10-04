@@ -39,6 +39,12 @@ import {
   signOut,
   onAuthStateChanged,
 } from './firebase';
+import {
+  findBundledDefaultPdfUrl,
+  renderPdfFileToMagazinePages,
+  savePdfAsPermanentDefault,
+  PdfRenderProgress,
+} from './utils/pdfProcessor';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
@@ -95,10 +101,63 @@ export function App() {
   const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
   const [submissionModalType, setSubmissionModalType] = useState<'audio' | 'video' | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [pdfUploadProgress, setPdfUploadProgress] = useState<PdfRenderProgress | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleDirectPdfUpload = async (file: File) => {
+    try {
+      setIsUploadingPdf(true);
+      setPdfUploadProgress({ currentPage: 0, totalPages: 0, percent: 0 });
+      await savePdfAsPermanentDefault(file);
+
+      const editionTitle = file.name.replace(/\.[^/.]+$/, '') || 'Rithu — College Magazine';
+      const renderedPages = await renderPdfFileToMagazinePages(
+        file,
+        (prog) => setPdfUploadProgress(prog),
+        (partialPages, totalPages) => {
+          setMagazinePages(partialPages);
+          setMagazineEdition({
+            title: editionTitle,
+            year: '2026',
+            institution: 'College of Engineering Munnar',
+            totalPages,
+            sourceType: 'pdf',
+            fileName: file.name,
+            updatedAt: 'Default PDF Edition',
+          });
+        }
+      );
+
+      const finalEdition: MagazineEditionInfo = {
+        title: editionTitle,
+        year: '2026',
+        institution: 'College of Engineering Munnar',
+        totalPages: renderedPages.length,
+        sourceType: 'pdf',
+        fileName: file.name,
+        updatedAt: 'Default PDF Edition',
+      };
+
+      setMagazinePages(renderedPages);
+      setMagazineEdition(finalEdition);
+      await savePersistedMagazine(renderedPages, finalEdition);
+      setIsUploadingPdf(false);
+      setPdfUploadProgress(null);
+      showToast(
+        `Set "${file.name}" (${renderedPages.length} pages) as the permanent default PDF magazine!`
+      );
+      syncMagazineToCloud(renderedPages, finalEdition).catch(() => {});
+    } catch (err) {
+      setIsUploadingPdf(false);
+      setPdfUploadProgress(null);
+      const msg = err instanceof Error ? err.message : 'Could not render PDF';
+      showToast(`PDF error: ${msg}`);
+    }
   };
 
   useEffect(() => {
@@ -124,6 +183,56 @@ export function App() {
           }
           if (edImg) setEditorialBoardImage(edImg);
           setIsHydrated(true);
+
+          if (mag.edition.sourceType !== 'pdf') {
+            const bundledPdfUrl = await findBundledDefaultPdfUrl();
+            if (bundledPdfUrl && active) {
+              setIsUploadingPdf(true);
+              try {
+                const rendered = await renderPdfFileToMagazinePages(
+                  bundledPdfUrl,
+                  (prog) => {
+                    if (active) setPdfUploadProgress(prog);
+                  },
+                  (partial, total) => {
+                    if (active) {
+                      setMagazinePages(partial);
+                      setMagazineEdition({
+                        title: 'Rithu — College Magazine',
+                        year: '2026',
+                        institution: 'College of Engineering Munnar',
+                        totalPages: total,
+                        sourceType: 'pdf',
+                        fileName: 'rithu-magazine.pdf',
+                        updatedAt: 'Default PDF Edition',
+                      });
+                    }
+                  }
+                );
+                if (active && rendered.length > 0) {
+                  const pdfEdition: MagazineEditionInfo = {
+                    title: 'Rithu — College Magazine',
+                    year: '2026',
+                    institution: 'College of Engineering Munnar',
+                    totalPages: rendered.length,
+                    sourceType: 'pdf',
+                    fileName: 'rithu-magazine.pdf',
+                    updatedAt: 'Default PDF Edition',
+                  };
+                  setMagazinePages(rendered);
+                  setMagazineEdition(pdfEdition);
+                  await savePersistedMagazine(rendered, pdfEdition);
+                }
+              } catch (e) {
+                console.warn('Could not load bundled default PDF:', e);
+              } finally {
+                if (active) {
+                  setIsUploadingPdf(false);
+                  setPdfUploadProgress(null);
+                }
+              }
+            }
+          }
         }
       } catch (err) {
         console.error('Storage initialization failed:', err);
@@ -354,6 +463,9 @@ export function App() {
             pages={magazinePages}
             editionInfo={magazineEdition}
             onNavigate={handleNavigate}
+            onUploadDirectPdf={isAdminLoggedIn ? handleDirectPdfUpload : undefined}
+            isUploadingPdf={isUploadingPdf}
+            pdfUploadProgress={pdfUploadProgress}
             onOpenAdminUpload={() => {
               if (isAdminLoggedIn) {
                 setCurrentView('admin-portal');
