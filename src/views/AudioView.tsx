@@ -73,6 +73,17 @@ export const AudioView: React.FC<AudioViewProps> = ({
             >
               <span>English</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setFilter('hindi')}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                filter === 'hindi'
+                  ? 'bg-[#800020] text-[#FFF9F2] font-semibold shadow-sm'
+                  : 'bg-[#F3E6D5] text-[#5C3A42] hover:text-[#1F040A] font-medium border border-[#E6D5C1]'
+              }`}
+            >
+              <span>Hindi</span>
+            </button>
           </nav>
         </header>
 
