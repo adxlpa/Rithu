@@ -1,0 +1,289 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { AudioTrack } from '../types';
+import { soundEngine } from '../utils/soundEngine';
+import { resolveMediaUrl } from '../utils/storage';
+
+interface AudioPlayerBarProps {
+  currentTrack: AudioTrack | null;
+  isPlaying: boolean;
+  onTogglePlay: () => void;
+  onClose?: () => void;
+}
+
+export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
+  currentTrack,
+  isPlaying,
+  onTogglePlay,
+  onClose,
+}) => {
+  const [elapsed, setElapsed] = useState(0);
+  const [realDuration, setRealDuration] = useState<number | null>(null);
+  const [speed, setSpeed] = useState('1×');
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(0.8);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [resolvedAudioUrl, setResolvedAudioUrl] = useState<string | null>(null);
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+
+  const scrubberRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const speedMap: Record<string, number> = {
+    '1×': 1,
+    '1.25×': 1.25,
+    '1.5×': 1.5,
+    '2×': 2,
+  };
+
+  const totalSeconds = realDuration || (currentTrack ? currentTrack.durationSeconds : 190);
+  const progressPercent = Math.min(100, Math.max(0, (elapsed / (totalSeconds || 1)) * 100));
+
+  useEffect(() => {
+    let active = true;
+    setElapsed(0);
+    setRealDuration(null);
+    soundEngine.stop();
+
+    if (currentTrack?.audioUrl) {
+      setIsLoadingMedia(true);
+      resolveMediaUrl(currentTrack.audioUrl)
+        .then((url) => {
+          if (active) {
+            setResolvedAudioUrl(url);
+            setIsLoadingMedia(false);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setResolvedAudioUrl(null);
+            setIsLoadingMedia(false);
+          }
+        });
+    } else {
+      setResolvedAudioUrl(null);
+      setIsLoadingMedia(false);
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [currentTrack?.id, currentTrack?.audioUrl]);
+
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (audioEl && resolvedAudioUrl) {
+      soundEngine.stop();
+      audioEl.playbackRate = speedMap[speed] || 1;
+      audioEl.volume = isMuted ? 0 : volume;
+      audioEl.muted = isMuted;
+      if (isPlaying) {
+        audioEl.play().catch(() => {});
+      } else {
+        audioEl.pause();
+      }
+    }
+  }, [isPlaying, resolvedAudioUrl, speed, volume, isMuted]);
+
+  useEffect(() => {
+    if (resolvedAudioUrl || isLoadingMedia || !currentTrack) {
+      soundEngine.stop();
+      return;
+    }
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+    if (isPlaying) {
+      soundEngine.play(currentTrack.category || 'General');
+      const rate = speedMap[speed] || 1;
+      timer = setInterval(() => {
+        setElapsed((prev) => (prev >= totalSeconds ? 0 : prev + 1));
+      }, 1000 / rate);
+    } else {
+      soundEngine.stop();
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isPlaying, speed, totalSeconds, currentTrack, resolvedAudioUrl, isLoadingMedia]);
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  if (!currentTrack) return null;
+
+  return (
+    <aside
+      aria-label="Audio player"
+      className="fixed bottom-4 left-4 right-4 z-40 flex justify-center pointer-events-none select-none transition-all duration-300"
+    >
+      {resolvedAudioUrl && (
+        <audio
+          ref={audioRef}
+          src={resolvedAudioUrl}
+          onTimeUpdate={(e) => setElapsed(Math.floor(e.currentTarget.currentTime))}
+          onLoadedMetadata={(e) => {
+            if (e.currentTarget.duration && isFinite(e.currentTarget.duration)) {
+              setRealDuration(Math.round(e.currentTarget.duration));
+            }
+          }}
+          onEnded={() => {
+            setElapsed(0);
+            onTogglePlay();
+          }}
+        />
+      )}
+
+      <div className="pointer-events-auto w-full max-w-[720px] rounded-[20px] backdrop-blur-[20px] bg-[#FFF9F2]/95 border border-[#800020]/20 shadow-[0_12px_36px_rgba(31,4,10,0.16)] px-5 py-3 sm:px-6 flex flex-col gap-2 transition-all text-[#1F040A]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <button
+              onClick={onTogglePlay}
+              disabled={isLoadingMedia}
+              aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
+              className="w-9 h-9 rounded-full bg-[#800020] text-[#FFF9F2] hover:bg-[#660019] flex items-center justify-center flex-shrink-0 transition-transform active:scale-95 shadow-sm cursor-pointer disabled:opacity-50"
+            >
+              {isLoadingMedia ? (
+                <span className="w-4 h-4 border-2 border-[#FFF9F2] border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <span className="material-symbols-outlined text-[20px] leading-none">
+                  {isPlaying ? 'pause' : 'play_arrow'}
+                </span>
+              )}
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] text-[#800020] font-semibold tracking-wider uppercase">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full bg-[#D45060] ${
+                    isPlaying ? 'animate-pulse' : 'opacity-40'
+                  }`}
+                />
+                <span>
+                  {isLoadingMedia
+                    ? 'Loading Cloud Audio...'
+                    : isPlaying
+                    ? 'Now Playing'
+                    : 'Paused'}
+                </span>
+              </div>
+              <div className="text-[14px] leading-5 font-semibold text-[#1F040A] truncate">
+                {currentTrack.title}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0 relative">
+            <span className="text-[12px] text-[#5C3A42] font-medium tabular-nums hidden xs:inline">
+              {formatTime(elapsed)} / {formatTime(totalSeconds)}
+            </span>
+            <button
+              onClick={() => {
+                const speeds = ['1×', '1.25×', '1.5×', '2×'];
+                const nextIdx = (speeds.indexOf(speed) + 1) % speeds.length;
+                setSpeed(speeds[nextIdx]);
+              }}
+              className="text-[12px] font-semibold text-[#800020] hover:text-[#1F040A] px-2 py-0.5 rounded hover:bg-[#F3E6D5] transition-colors cursor-pointer"
+              title="Playback speed"
+            >
+              {speed}
+            </button>
+
+            <div
+              className="relative flex items-center"
+              onMouseEnter={() => setShowVolumeSlider(true)}
+              onMouseLeave={() => setShowVolumeSlider(false)}
+            >
+              <button
+                onClick={() => {
+                  const muted = soundEngine.toggleMute();
+                  setIsMuted(muted);
+                  if (audioRef.current) audioRef.current.muted = muted;
+                }}
+                aria-label="Mute or adjust volume"
+                className="w-7 h-7 flex items-center justify-center text-[#5C3A42] hover:text-[#800020] transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[19px]">
+                  {isMuted || volume === 0
+                    ? 'volume_off'
+                    : volume < 0.5
+                    ? 'volume_down'
+                    : 'volume_up'}
+                </span>
+              </button>
+              {showVolumeSlider && (
+                <div className="absolute bottom-8 right-0 bg-[#FFF9F2] border border-[#E6D5C1] shadow-xl p-2.5 rounded-lg flex items-center gap-2 w-28 z-50">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={isMuted ? 0 : volume}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setVolume(val);
+                      soundEngine.setVolume(val);
+                      if (audioRef.current) audioRef.current.volume = val;
+                      if (isMuted && val > 0) {
+                        setIsMuted(false);
+                        if (audioRef.current) audioRef.current.muted = false;
+                      }
+                    }}
+                    className="w-full h-1 accent-[#800020] cursor-pointer"
+                  />
+                </div>
+              )}
+            </div>
+
+            {onClose && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  soundEngine.stop();
+                  if (audioRef.current) audioRef.current.pause();
+                  onClose();
+                }}
+                aria-label="Close now playing bar"
+                className="w-8 h-8 rounded-full bg-[#F3E6D5] hover:bg-[#800020] flex items-center justify-center text-[#1F040A] hover:text-[#FFF9F2] transition-all cursor-pointer ml-1 border border-[#800020]/20 shadow-xs group"
+                title="Close now playing bar"
+              >
+                <span className="material-symbols-outlined text-[18px] group-hover:scale-110 transition-transform">
+                  close
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div
+          ref={scrubberRef}
+          onClick={(e) => {
+            if (!scrubberRef.current) return;
+            const rect = scrubberRef.current.getBoundingClientRect();
+            const offsetX = e.clientX - rect.left;
+            const ratio = Math.max(0, Math.min(1, offsetX / rect.width));
+            const newSec = Math.floor(ratio * totalSeconds);
+            setElapsed(newSec);
+            if (audioRef.current && resolvedAudioUrl) {
+              audioRef.current.currentTime = newSec;
+            }
+          }}
+          aria-label="Audio progress scrubber"
+          role="slider"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progressPercent)}
+          className="w-full flex items-center gap-1 cursor-pointer group py-1"
+        >
+          <div className="w-full h-1.5 bg-[#F3E6D5] rounded-full overflow-hidden relative group-hover:h-2 transition-all">
+            <div
+              className="h-full bg-[#800020] rounded-full transition-all duration-150"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+};

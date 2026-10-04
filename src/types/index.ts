@@ -18,7 +18,7 @@ export interface VideoItem {
   id: string;
   title: string;
   dateStr: string;
-  category: string; // e.g. "Events", "Workshops", "IEEE", "Interviews"
+  category: string;
   duration: string;
   durationSeconds: number;
   image: string;
@@ -32,7 +32,7 @@ export interface VideoItem {
 
 export interface MagazineSpread {
   id: string;
-  spreadLabel: string; // e.g. "24–25"
+  spreadLabel: string;
   pageLeftNum: number;
   pageRightNum: number;
   categoryLeft: string;
@@ -53,18 +53,44 @@ export interface MagazineSpread {
 
 export interface MagazinePage {
   id: string;
-  pageNumber: number; // 0 = Cover, 1..N-2 = Content, N-1 = Back Cover
+  pageNumber: number;
   type: 'cover' | 'content' | 'back-cover';
   title?: string;
   subtitle?: string;
   pdfImageUrl?: string;
   templateData?: {
     side: 'cover' | 'left' | 'right' | 'back';
+    layoutVariant?:
+      | 'cover-2025'
+      | 'quote-window'
+      | 'full-photo'
+      | 'red-poster'
+      | 'message'
+      | 'poem'
+      | 'editorial-board'
+      | 'divider'
+      | 'contents'
+      | 'two-column'
+      | 'art-grid'
+      | 'filmstrip'
+      | 'polaroid-grid'
+      | 'collective-left'
+      | 'collective-right'
+      | 'club'
+      | 'group-photos'
+      | 'union-grid'
+      | 'back-2025';
     category?: string;
     categoryTag?: string;
     title?: string;
+    subtitle?: string;
     author?: string;
+    authorRole?: string;
     paragraphs?: string[];
+    columns?: string[][];
+    items?: { title: string; subtitle?: string; image?: string }[];
+    bgColor?: string;
+    textColor?: string;
     footerPrimary?: string;
     footerSecondary?: string;
     image?: string;

@@ -1,20 +1,16 @@
-/**
- * @license
- irfan power 
- irfan is our brain
- irfan is always irfan
- this magazine is specially dedicated for irfan
- irfan will be always in our heart
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import { useState, useEffect } from 'react';
-import { ViewMode, AudioTrack, VideoItem, MagazinePage, MagazineEditionInfo } from './types';
+import {
+  ViewMode,
+  AudioTrack,
+  VideoItem,
+  MagazinePage,
+  MagazineEditionInfo,
+} from './types';
 import {
   INITIAL_AUDIO_TRACKS,
-  INITIAL_VIDEOS,
-  DEFAULT_MAGAZINE_PAGES,
+  INITIAL_VIDEO_ITEMS,
   INITIAL_MAGAZINE_EDITION,
+  DEFAULT_MAGAZINE_PAGES,
 } from './data/initialData';
 import {
   loadPersistedAudioTracks,
@@ -25,23 +21,29 @@ import {
   savePersistedMagazine,
   resetPersistedMagazine,
   loadPersistedEditorialBoardImage,
-  subscribeToCloudArchive,
-  seedInitialCloudDataIfNeeded,
-  saveCloudAudioTrack,
+  subscribeToCloudContent,
+  ensureInitialCloudSeed,
+  createCloudAudioTrack,
   updateCloudAudioTrack,
   deleteCloudAudioTrack,
-  saveCloudVideoItem,
+  createCloudVideoItem,
   updateCloudVideoItem,
   deleteCloudVideoItem,
-  saveCloudMagazineEditionAndPages,
-  resetCloudMagazineToCurated,
+  syncMagazineToCloud,
+  resetCloudMagazineToDefault,
 } from './utils/storage';
-import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase';
-import { Header } from './components/Header';
+import {
+  auth,
+  googleProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+} from './firebase';
+import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
-import { FloatingAudioPlayer } from './components/FloatingAudioPlayer';
-import { VideoPlayerModal } from './components/VideoPlayerModal';
-import { SubmitMediaModal } from './components/SubmitMediaModal';
+import { AudioPlayerBar } from './components/AudioPlayerBar';
+import { VideoModal } from './components/VideoModal';
+import { SubmissionModal } from './components/SubmissionModal';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { HomeView } from './views/HomeView';
 import { MagazineView } from './views/MagazineView';
@@ -49,34 +51,28 @@ import { VideoView } from './views/VideoView';
 import { AudioView } from './views/AudioView';
 import { AdminView } from './views/AdminView';
 
-export default function App() {
+export function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('home');
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>(INITIAL_AUDIO_TRACKS);
-  const [videoItems, setVideoItems] = useState<VideoItem[]>(INITIAL_VIDEOS);
-
-  // Magazine Edition & PDF State
+  const [videoItems, setVideoItems] = useState<VideoItem[]>(INITIAL_VIDEO_ITEMS);
   const [magazinePages, setMagazinePages] = useState<MagazinePage[]>(DEFAULT_MAGAZINE_PAGES);
-  const [magazineEdition, setMagazineEdition] = useState<MagazineEditionInfo>(INITIAL_MAGAZINE_EDITION);
+  const [magazineEdition, setMagazineEdition] =
+    useState<MagazineEditionInfo>(INITIAL_MAGAZINE_EDITION);
   const [editorialBoardImage, setEditorialBoardImage] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // Storage Initialization Flag
-  const [isStorageReady, setIsStorageReady] = useState(false);
-
-  // Authentication State: Driven by Google Firebase Authentication + Cloud Vault persistence for Vercel/GitHub Pages
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     if (auth.currentUser) return true;
     try {
       const saved = localStorage.getItem('rithu_firebase_admin');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return Boolean(parsed?.isLoggedIn);
-      }
+      if (saved) return !!JSON.parse(saved)?.isLoggedIn;
     } catch {
       // Ignore
     }
     return false;
   });
-  const [isCloudSynced, setIsCloudSynced] = useState<boolean>(true);
+
+  const [isCloudSynced, setIsCloudSynced] = useState(true);
   const [adminUser, setAdminUser] = useState<string>(() => {
     if (auth.currentUser) {
       return auth.currentUser.displayName || auth.currentUser.email || 'Google Admin';
@@ -92,18 +88,12 @@ export default function App() {
     }
     return '';
   });
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
 
-  // Audio Player State: Starts as null so "Now Playing" is NEVER shown on page load/refresh
-  // Only shown when audio is actively played by the user.
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<AudioTrack | null>(null);
-  const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
-
-  // Video Modal State
-  const [activeVideoModal, setActiveVideoModal] = useState<VideoItem | null>(null);
-
-  // Contribution Submission Modal
-  const [submitModalType, setSubmitModalType] = useState<'video' | 'audio' | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
+  const [submissionModalType, setSubmissionModalType] = useState<'audio' | 'video' | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -111,112 +101,100 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // 1. Initial Load from Local Cache + Live Real-Time Cloud Firestore Subscription (No login needed for visitors)
   useEffect(() => {
-    let isMounted = true;
-    let hasCloudAudioArrived = false;
-    let hasCloudVideoArrived = false;
-    let hasCloudMagazineArrived = false;
+    let active = true;
+    let hasCloudAudio = false;
+    let hasCloudVideo = false;
+    let hasCloudMagazine = false;
 
     async function initStorage() {
       try {
-        const [loadedTracks, loadedVideos, loadedMag, loadedBoardImg] = await Promise.all([
+        const [tracks, videos, mag, edImg] = await Promise.all([
           loadPersistedAudioTracks(),
           loadPersistedVideoItems(),
           loadPersistedMagazine(),
           loadPersistedEditorialBoardImage(),
         ]);
-        if (isMounted) {
-          if (!hasCloudAudioArrived) {
-            setAudioTracks(loadedTracks);
+        if (active) {
+          if (!hasCloudAudio) setAudioTracks(tracks);
+          if (!hasCloudVideo) setVideoItems(videos);
+          if (!hasCloudMagazine) {
+            setMagazinePages(mag.pages);
+            setMagazineEdition(mag.edition);
           }
-          if (!hasCloudVideoArrived) {
-            setVideoItems(loadedVideos);
-          }
-          if (!hasCloudMagazineArrived) {
-            setMagazinePages(loadedMag.pages);
-            setMagazineEdition(loadedMag.edition);
-          }
-          if (loadedBoardImg) {
-            setEditorialBoardImage(loadedBoardImg);
-          }
-          setIsStorageReady(true);
+          if (edImg) setEditorialBoardImage(edImg);
+          setIsHydrated(true);
         }
       } catch (err) {
         console.error('Storage initialization failed:', err);
-        if (isMounted) setIsStorageReady(true);
+        if (active) setIsHydrated(true);
       }
     }
     initStorage();
 
-    // Subscribe to real-time updates from Cloud Firestore across all devices without login
-    const unsubscribeCloud = subscribeToCloudArchive({
-      onAudioTracks: (cloudTracks) => {
-        if (isMounted) {
-          hasCloudAudioArrived = true;
-          setAudioTracks(cloudTracks);
+    const unsubCloud = subscribeToCloudContent({
+      onAudioTracks: (tracks) => {
+        if (active) {
+          hasCloudAudio = true;
+          setAudioTracks(tracks);
         }
       },
-      onVideoItems: (cloudVideos) => {
-        if (isMounted) {
-          hasCloudVideoArrived = true;
-          setVideoItems(cloudVideos);
+      onVideoItems: (videos) => {
+        if (active) {
+          hasCloudVideo = true;
+          setVideoItems(videos);
         }
       },
-      onMagazine: (cloudPages, cloudEdition) => {
-        if (isMounted) {
-          hasCloudMagazineArrived = true;
-          setMagazinePages(cloudPages);
-          setMagazineEdition(cloudEdition);
+      onMagazine: (pages, edition) => {
+        if (active) {
+          hasCloudMagazine = true;
+          setMagazinePages(pages);
+          setMagazineEdition(edition);
         }
       },
-      onEditorialBoardImage: (cloudBoardImg) => {
-        if (isMounted && cloudBoardImg) {
-          setEditorialBoardImage(cloudBoardImg);
-        }
+      onEditorialBoardImage: (img) => {
+        if (active && img) setEditorialBoardImage(img);
       },
     });
 
     return () => {
-      isMounted = false;
-      unsubscribeCloud();
+      active = false;
+      unsubCloud();
     };
   }, []);
 
-  // 2. Listen to Firebase Auth state for Google Admin session
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const displayLabel = user.displayName || user.email || 'Google Admin';
+        const name = user.displayName || user.email || 'Google Admin';
         setIsAdminLoggedIn(true);
         setIsCloudSynced(true);
-        setAdminUser(displayLabel);
+        setAdminUser(name);
         try {
           localStorage.setItem(
             'rithu_firebase_admin',
-            JSON.stringify({ isLoggedIn: true, adminUser: displayLabel })
+            JSON.stringify({ isLoggedIn: true, adminUser: name })
           );
         } catch {
           // Ignore
         }
         try {
-          await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition);
+          await ensureInitialCloudSeed(audioTracks, videoItems, magazineEdition);
         } catch (err) {
           console.warn('Initial cloud seed notice:', err);
         }
       }
     });
-    return () => unsubscribeAuth();
+    return () => unsubAuth();
   }, []);
 
-  // Support direct #admin URL hash navigation on GitHub Pages
   useEffect(() => {
     const checkHash = () => {
       if (window.location.hash === '#admin') {
         if (isAdminLoggedIn) {
           setCurrentView('admin-portal');
         } else {
-          setIsLoginModalOpen(true);
+          setLoginModalOpen(true);
         }
       }
     };
@@ -225,92 +203,85 @@ export default function App() {
     return () => window.removeEventListener('hashchange', checkHash);
   }, [isAdminLoggedIn]);
 
-  // 3. Automatic Local Cache Persistence on State Changes
   useEffect(() => {
-    if (isStorageReady) {
-      savePersistedAudioTracks(audioTracks);
-    }
-  }, [audioTracks, isStorageReady]);
+    if (isHydrated) savePersistedAudioTracks(audioTracks);
+  }, [audioTracks, isHydrated]);
 
   useEffect(() => {
-    if (isStorageReady) {
-      savePersistedVideoItems(videoItems);
-    }
-  }, [videoItems, isStorageReady]);
+    if (isHydrated) savePersistedVideoItems(videoItems);
+  }, [videoItems, isHydrated]);
 
   useEffect(() => {
-    if (isStorageReady) {
-      savePersistedMagazine(magazinePages, magazineEdition);
-    }
-  }, [magazinePages, magazineEdition, isStorageReady]);
+    if (isHydrated) savePersistedMagazine(magazinePages, magazineEdition);
+  }, [magazinePages, magazineEdition, isHydrated]);
 
-  const handleSelectAudioTrack = (track: AudioTrack) => {
+  const handleSelectTrack = (track: AudioTrack) => {
     if (currentTrack?.id === track.id) {
-      setIsPlayingAudio((p) => !p);
+      setIsPlaying((prev) => !prev);
     } else {
       setCurrentTrack(track);
-      setIsPlayingAudio(true);
+      setIsPlaying(true);
     }
   };
 
-  const handleToggleAudio = () => {
-    setIsPlayingAudio((p) => !p);
+  const handleTogglePlay = () => {
+    setIsPlaying((prev) => !prev);
   };
 
-  const handleCloseAudio = () => {
-    setIsPlayingAudio(false);
+  const handleCloseAudioPlayer = () => {
+    setIsPlaying(false);
     setCurrentTrack(null);
   };
 
   const handleNavigate = (view: ViewMode) => {
     if (view === 'admin-portal' && !isAdminLoggedIn) {
-      setIsLoginModalOpen(true);
+      setLoginModalOpen(true);
       return;
     }
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleLoginSuccess = (user: string) => {
+  const handleLoginSuccess = (name: string) => {
     setIsAdminLoggedIn(true);
     setIsCloudSynced(true);
-    setAdminUser(user);
+    setAdminUser(name);
     try {
       localStorage.setItem(
         'rithu_firebase_admin',
-        JSON.stringify({ isLoggedIn: true, adminUser: user })
+        JSON.stringify({ isLoggedIn: true, adminUser: name })
       );
     } catch {
       // Ignore
     }
     setCurrentView('admin-portal');
-    seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition).catch(() => {});
-    showToast(`Signed in with Google as ${user}. Changes sync everywhere via Firebase.`);
+    ensureInitialCloudSeed(audioTracks, videoItems, magazineEdition).catch(() => {});
+    showToast(`Signed in with Google as ${name}. Changes sync everywhere via Firebase.`);
   };
 
   const handleConnectCloudAdmin = async () => {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      const label = user.displayName || user.email || 'Google Admin';
+      const res = await signInWithPopup(auth, googleProvider);
+      const user = res.user;
+      const name = user.displayName || user.email || 'Google Admin';
       setIsAdminLoggedIn(true);
       setIsCloudSynced(true);
-      setAdminUser(label);
+      setAdminUser(name);
       try {
         localStorage.setItem(
           'rithu_firebase_admin',
-          JSON.stringify({ isLoggedIn: true, adminUser: label })
+          JSON.stringify({ isLoggedIn: true, adminUser: name })
         );
       } catch {
         // Ignore
       }
-      await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition);
-      showToast(`Google Admin (${label}) connected! All changes sync across every device.`);
+      await ensureInitialCloudSeed(audioTracks, videoItems, magazineEdition);
+      showToast(`Google Admin (${name}) connected! All changes sync across every device.`);
     } catch {
       setIsAdminLoggedIn(true);
       setIsCloudSynced(true);
       setAdminUser('adhilpa004@gmail.com');
-      await seedInitialCloudDataIfNeeded(audioTracks, videoItems, magazineEdition).catch(() => {});
+      await ensureInitialCloudSeed(audioTracks, videoItems, magazineEdition).catch(() => {});
       showToast('Firebase Cloud Admin active! All changes sync across every device.');
     }
   };
@@ -328,160 +299,18 @@ export default function App() {
     setIsAdminLoggedIn(false);
     setAdminUser('');
     if (window.location.hash === '#admin') {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      window.history.replaceState(
+        null,
+        '',
+        window.location.pathname + window.location.search
+      );
     }
     setCurrentView('home');
     showToast('Signed out of Google Firebase Admin.');
   };
 
-  // Magazine Handlers (Always stored in Firebase for everyone without login)
-  const handleUpdateMagazinePages = async (
-    newPages: MagazinePage[],
-    newInfo: MagazineEditionInfo,
-    onProgress?: (percent: number) => void
-  ) => {
-    setMagazinePages(newPages);
-    setMagazineEdition(newInfo);
-    savePersistedMagazine(newPages, newInfo);
-    try {
-      showToast('Uploading magazine pages to Firebase for all visitors...');
-      await saveCloudMagazineEditionAndPages(newPages, newInfo, onProgress);
-      showToast('Magazine synced to Firebase! Live for everyone across all devices.');
-    } catch (err) {
-      console.error('Cloud magazine sync failed:', err);
-      showToast('Magazine saved locally.');
-    }
-  };
-
-  const handleResetMagazinePages = async () => {
-    await resetPersistedMagazine();
-    setMagazinePages(DEFAULT_MAGAZINE_PAGES);
-    setMagazineEdition(INITIAL_MAGAZINE_EDITION);
-    try {
-      await resetCloudMagazineToCurated();
-      showToast('Uploaded PDF deleted & default magazine restored across all devices.');
-    } catch (err) {
-      console.error('Cloud magazine reset failed:', err);
-      showToast('Magazine restored locally.');
-    }
-  };
-
-  // Admin CRUD for Audio (Always stored in Firebase for everyone without login)
-  const handleAddAudioTrack = async (track: AudioTrack) => {
-    const trackWithOwner: AudioTrack = {
-      ...track,
-      createdByUid: auth.currentUser?.uid || 'rithu-editorial-admin',
-    };
-    setAudioTracks((prev) => {
-      const next = [trackWithOwner, ...prev];
-      savePersistedAudioTracks(next);
-      return next;
-    });
-    try {
-      await saveCloudAudioTrack(trackWithOwner);
-      showToast(`Audio track "${track.title}" stored in Firebase for all visitors.`);
-    } catch (err) {
-      console.error('Cloud audio create failed:', err);
-      showToast(`Saved "${track.title}" locally.`);
-    }
-  };
-
-  const handleUpdateAudioTrack = async (track: AudioTrack) => {
-    const updatedTrack: AudioTrack = {
-      ...track,
-      createdByUid: track.createdByUid || auth.currentUser?.uid || 'rithu-editorial-admin',
-    };
-    setAudioTracks((prev) => {
-      const next = prev.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
-      savePersistedAudioTracks(next);
-      return next;
-    });
-    if (currentTrack?.id === updatedTrack.id) {
-      setCurrentTrack(updatedTrack);
-    }
-    try {
-      await updateCloudAudioTrack(updatedTrack);
-      showToast(`Audio track "${track.title}" updated in Firebase across all devices.`);
-    } catch (err) {
-      console.error('Cloud audio update failed:', err);
-      showToast(`Updated "${track.title}" locally.`);
-    }
-  };
-
-  const handleDeleteAudioTrack = async (id: string) => {
-    const target = audioTracks.find((t) => t.id === id);
-    const remaining = audioTracks.filter((t) => t.id !== id);
-    setAudioTracks(remaining);
-    savePersistedAudioTracks(remaining);
-    if (currentTrack?.id === id) {
-      setIsPlayingAudio(false);
-      setCurrentTrack(null);
-    }
-    try {
-      await deleteCloudAudioTrack(id, target?.audioUrl, remaining);
-      showToast('Audio track permanently deleted from Firebase for all visitors.');
-    } catch (err) {
-      console.error('Cloud audio delete failed:', err);
-      showToast('Audio track removed locally.');
-    }
-  };
-
-  // Admin CRUD for Video (Always stored in Firebase for everyone without login)
-  const handleAddVideoItem = async (video: VideoItem) => {
-    const videoWithOwner: VideoItem = {
-      ...video,
-      createdByUid: auth.currentUser?.uid || 'rithu-editorial-admin',
-    };
-    setVideoItems((prev) => {
-      const next = [videoWithOwner, ...prev];
-      savePersistedVideoItems(next);
-      return next;
-    });
-    try {
-      await saveCloudVideoItem(videoWithOwner);
-      showToast(`Video "${video.title}" stored in Firebase for all visitors.`);
-    } catch (err) {
-      console.error('Cloud video create failed:', err);
-      showToast(`Saved "${video.title}" locally.`);
-    }
-  };
-
-  const handleUpdateVideoItem = async (video: VideoItem) => {
-    const updatedVideo: VideoItem = {
-      ...video,
-      createdByUid: video.createdByUid || auth.currentUser?.uid || 'rithu-editorial-admin',
-    };
-    setVideoItems((prev) => {
-      const next = prev.map((v) => (v.id === updatedVideo.id ? updatedVideo : v));
-      savePersistedVideoItems(next);
-      return next;
-    });
-    try {
-      await updateCloudVideoItem(updatedVideo);
-      showToast(`Video "${video.title}" updated in Firebase across all devices.`);
-    } catch (err) {
-      console.error('Cloud video update failed:', err);
-      showToast(`Updated "${video.title}" locally.`);
-    }
-  };
-
-  const handleDeleteVideoItem = async (id: string) => {
-    const target = videoItems.find((v) => v.id === id);
-    const remaining = videoItems.filter((v) => v.id !== id);
-    setVideoItems(remaining);
-    savePersistedVideoItems(remaining);
-    try {
-      await deleteCloudVideoItem(id, target?.videoUrl, remaining);
-      showToast('Video permanently deleted from Firebase for all visitors.');
-    } catch (err) {
-      console.error('Cloud video delete failed:', err);
-      showToast('Video record removed locally.');
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-[#FFF9F2] text-[#1F040A] selection:bg-[#800020] selection:text-[#FFF9F2]">
-      {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-20 right-6 z-50 bg-[#FFF9F2] text-[#1F040A] px-5 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-[#800020]/30 animate-slideDown">
           <span className="material-symbols-outlined text-[#800020] text-[20px]">
@@ -497,17 +326,15 @@ export default function App() {
         </div>
       )}
 
-      {/* Global Navigation Header */}
-      <Header
+      <Navbar
         currentView={currentView}
         onNavigate={handleNavigate}
         isAdminLoggedIn={isAdminLoggedIn}
         adminUser={adminUser}
-        onOpenLogin={() => setIsLoginModalOpen(true)}
+        onOpenLogin={() => setLoginModalOpen(true)}
         onSignOutAdmin={handleSignOutAdmin}
       />
 
-      {/* Main View Area */}
       <main className="w-full flex-1 pt-16">
         {currentView === 'home' && (
           <HomeView
@@ -515,7 +342,7 @@ export default function App() {
             onPlayAudioDirect={() => {
               if (audioTracks.length > 0) {
                 setCurrentTrack(audioTracks[0]);
-                setIsPlayingAudio(true);
+                setIsPlaying(true);
               }
             }}
             editorialBoardImage={editorialBoardImage}
@@ -531,7 +358,7 @@ export default function App() {
               if (isAdminLoggedIn) {
                 setCurrentView('admin-portal');
               } else {
-                setIsLoginModalOpen(true);
+                setLoginModalOpen(true);
               }
             }}
           />
@@ -540,8 +367,8 @@ export default function App() {
         {currentView === 'video' && (
           <VideoView
             videos={videoItems}
-            onSelectVideo={(v) => setActiveVideoModal(v)}
-            onOpenSubmitModal={() => setSubmitModalType('video')}
+            onSelectVideo={(v) => setSelectedVideo(v)}
+            onOpenSubmitModal={() => setSubmissionModalType('video')}
           />
         )}
 
@@ -549,32 +376,156 @@ export default function App() {
           <AudioView
             tracks={audioTracks}
             currentTrack={currentTrack}
-            isPlaying={isPlayingAudio}
-            onSelectTrack={handleSelectAudioTrack}
-            onOpenSubmitModal={() => setSubmitModalType('audio')}
+            isPlaying={isPlaying}
+            onSelectTrack={handleSelectTrack}
+            onOpenSubmitModal={() => setSubmissionModalType('audio')}
           />
         )}
 
-        {currentView === 'admin-portal' && (
-          isAdminLoggedIn ? (
+        {currentView === 'admin-portal' &&
+          (isAdminLoggedIn ? (
             <AdminView
               audioTracks={audioTracks}
               videoItems={videoItems}
               magazinePages={magazinePages}
               magazineEdition={magazineEdition}
-              onUpdateMagazinePages={handleUpdateMagazinePages}
-              onResetMagazinePages={handleResetMagazinePages}
-              onAddAudioTrack={handleAddAudioTrack}
-              onUpdateAudioTrack={handleUpdateAudioTrack}
-              onDeleteAudioTrack={handleDeleteAudioTrack}
-              onAddVideoItem={handleAddVideoItem}
-              onUpdateVideoItem={handleUpdateVideoItem}
-              onDeleteVideoItem={handleDeleteVideoItem}
+              onUpdateMagazinePages={async (pages, edition, onProgress) => {
+                setMagazinePages(pages);
+                setMagazineEdition(edition);
+                savePersistedMagazine(pages, edition);
+                try {
+                  showToast('Uploading magazine pages to Firebase for all visitors...');
+                  await syncMagazineToCloud(pages, edition, onProgress);
+                  showToast('Magazine synced to Firebase! Live for everyone across all devices.');
+                } catch (err) {
+                  console.warn('Cloud magazine sync notice:', err);
+                  showToast('Magazine saved locally.');
+                }
+              }}
+              onResetMagazinePages={async () => {
+                await resetPersistedMagazine();
+                setMagazinePages(DEFAULT_MAGAZINE_PAGES);
+                setMagazineEdition(INITIAL_MAGAZINE_EDITION);
+                try {
+                  await resetCloudMagazineToDefault();
+                  showToast(
+                    'Uploaded PDF deleted & default magazine restored across all devices.'
+                  );
+                } catch (err) {
+                  console.warn('Cloud magazine reset notice:', err);
+                  showToast('Magazine restored locally.');
+                }
+              }}
+              onAddAudioTrack={async (track) => {
+                const enriched = {
+                  ...track,
+                  createdByUid: auth.currentUser?.uid || 'rithu-editorial-admin',
+                };
+                setAudioTracks((prev) => {
+                  const next = [enriched, ...prev];
+                  savePersistedAudioTracks(next);
+                  return next;
+                });
+                try {
+                  await createCloudAudioTrack(enriched);
+                  showToast(`Audio track "${track.title}" stored in Firebase for all visitors.`);
+                } catch (err) {
+                  console.warn('Cloud audio create notice:', err);
+                  showToast(`Saved "${track.title}" locally.`);
+                }
+              }}
+              onUpdateAudioTrack={async (track) => {
+                const enriched = {
+                  ...track,
+                  createdByUid:
+                    track.createdByUid || auth.currentUser?.uid || 'rithu-editorial-admin',
+                };
+                setAudioTracks((prev) => {
+                  const next = prev.map((t) => (t.id === enriched.id ? enriched : t));
+                  savePersistedAudioTracks(next);
+                  return next;
+                });
+                if (currentTrack?.id === enriched.id) setCurrentTrack(enriched);
+                try {
+                  await updateCloudAudioTrack(enriched);
+                  showToast(`Audio track "${track.title}" updated in Firebase across all devices.`);
+                } catch (err) {
+                  console.warn('Cloud audio update notice:', err);
+                  showToast(`Updated "${track.title}" locally.`);
+                }
+              }}
+              onDeleteAudioTrack={async (id) => {
+                const target = audioTracks.find((t) => t.id === id);
+                const next = audioTracks.filter((t) => t.id !== id);
+                setAudioTracks(next);
+                savePersistedAudioTracks(next);
+                if (currentTrack?.id === id) {
+                  setIsPlaying(false);
+                  setCurrentTrack(null);
+                }
+                try {
+                  await deleteCloudAudioTrack(id, target?.audioUrl, next);
+                  showToast('Audio track permanently deleted from Firebase for all visitors.');
+                } catch (err) {
+                  console.warn('Cloud audio delete notice:', err);
+                  showToast('Audio track removed locally.');
+                }
+              }}
+              onAddVideoItem={async (video) => {
+                const enriched = {
+                  ...video,
+                  createdByUid: auth.currentUser?.uid || 'rithu-editorial-admin',
+                };
+                setVideoItems((prev) => {
+                  const next = [enriched, ...prev];
+                  savePersistedVideoItems(next);
+                  return next;
+                });
+                try {
+                  await createCloudVideoItem(enriched);
+                  showToast(`Video "${video.title}" stored in Firebase for all visitors.`);
+                } catch (err) {
+                  console.warn('Cloud video create notice:', err);
+                  showToast(`Saved "${video.title}" locally.`);
+                }
+              }}
+              onUpdateVideoItem={async (video) => {
+                const enriched = {
+                  ...video,
+                  createdByUid:
+                    video.createdByUid || auth.currentUser?.uid || 'rithu-editorial-admin',
+                };
+                setVideoItems((prev) => {
+                  const next = prev.map((v) => (v.id === enriched.id ? enriched : v));
+                  savePersistedVideoItems(next);
+                  return next;
+                });
+                try {
+                  await updateCloudVideoItem(enriched);
+                  showToast(`Video "${video.title}" updated in Firebase across all devices.`);
+                } catch (err) {
+                  console.warn('Cloud video update notice:', err);
+                  showToast(`Updated "${video.title}" locally.`);
+                }
+              }}
+              onDeleteVideoItem={async (id) => {
+                const target = videoItems.find((v) => v.id === id);
+                const next = videoItems.filter((v) => v.id !== id);
+                setVideoItems(next);
+                savePersistedVideoItems(next);
+                try {
+                  await deleteCloudVideoItem(id, target?.videoUrl, next);
+                  showToast('Video permanently deleted from Firebase for all visitors.');
+                } catch (err) {
+                  console.warn('Cloud video delete notice:', err);
+                  showToast('Video record removed locally.');
+                }
+              }}
               onPlayAudioPreview={(track) => {
                 setCurrentTrack(track);
-                setIsPlayingAudio(true);
+                setIsPlaying(true);
               }}
-              onSelectVideoPreview={(video) => setActiveVideoModal(video)}
+              onSelectVideoPreview={(video) => setSelectedVideo(video)}
               onNavigate={handleNavigate}
               onSignOut={handleSignOutAdmin}
               adminUser={adminUser}
@@ -590,61 +541,55 @@ export default function App() {
                 Admin Authentication Required
               </h2>
               <p className="text-[15px] text-[#5C3A42] max-w-sm mb-6">
-                Please sign in as Admin to upload magazines, audio, and video to Firebase for all visitors.
+                Please sign in as Admin to upload magazines, audio, and video to Firebase for all
+                visitors.
               </p>
               <button
-                onClick={() => setIsLoginModalOpen(true)}
+                onClick={() => setLoginModalOpen(true)}
                 className="px-6 py-2.5 bg-[#800020] hover:bg-[#660019] text-[#FFF9F2] rounded-[10px] font-semibold text-[15px] shadow-md shadow-[#800020]/20 active:scale-[0.98] transition-all cursor-pointer"
               >
                 Sign In to Admin
               </button>
             </div>
-          )
-        )}
+          ))}
       </main>
 
-      {/* Floating Audio Player: Only shown while audio is played (never shown on refresh or idle home page) */}
-      {currentView !== 'magazine' && currentTrack && isPlayingAudio && (
-        <FloatingAudioPlayer
+      {currentView !== 'magazine' && currentTrack && isPlaying && (
+        <AudioPlayerBar
           currentTrack={currentTrack}
-          isPlaying={isPlayingAudio}
-          onTogglePlay={handleToggleAudio}
-          onClose={handleCloseAudio}
+          isPlaying={isPlaying}
+          onTogglePlay={handleTogglePlay}
+          onClose={handleCloseAudioPlayer}
         />
       )}
 
-      {/* Video Modal Player */}
-      {activeVideoModal && (
-        <VideoPlayerModal
-          video={activeVideoModal}
-          onClose={() => setActiveVideoModal(null)}
-        />
+      {selectedVideo && (
+        <VideoModal video={selectedVideo} onClose={() => setSelectedVideo(null)} />
       )}
 
-      {/* Submission Modal */}
-      {submitModalType && (
-        <SubmitMediaModal
-          type={submitModalType}
+      {submissionModalType && (
+        <SubmissionModal
+          type={submissionModalType}
           isOpen={true}
-          onClose={() => setSubmitModalType(null)}
+          onClose={() => setSubmissionModalType(null)}
           onSubmitSuccess={(msg) => showToast(msg)}
         />
       )}
 
-      {/* Admin Login Modal */}
       <AdminLoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
+        isOpen={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
       />
 
-      {/* Footer */}
       <Footer
         onNavigate={handleNavigate}
         dark={false}
         isAdminLoggedIn={isAdminLoggedIn}
-        onOpenLogin={() => setIsLoginModalOpen(true)}
+        onOpenLogin={() => setLoginModalOpen(true)}
       />
     </div>
   );
 }
+
+export default App;

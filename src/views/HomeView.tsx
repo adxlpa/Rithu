@@ -1,6 +1,7 @@
 import React from 'react';
 import { ViewMode } from '../types';
 import { EditorialBoardSection } from '../components/EditorialBoardSection';
+import { titleHeroImg, rithuCardImg, cemCampusSunriseImg } from '../data/initialData';
 
 interface HomeViewProps {
   onNavigate: (view: ViewMode) => void;
@@ -42,9 +43,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             className="group relative w-full aspect-[21/9] min-h-[280px] max-h-[540px] rounded-[16px] overflow-hidden bg-[#F3E6D5] border border-[#E6D5C1] shadow-xl transition-all duration-300 cursor-pointer"
           >
             <img
-              src="https://imguser.free.nf/uploads/0_1790440794_6ab7f55a9e0f2_title.jpg"
+              src={titleHeroImg}
               alt="Misty tea plantations and hills surrounding College of Engineering Munnar campus"
-              referrerPolicy="no-referrer"
               className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent flex items-end p-6 sm:p-8">
@@ -70,9 +70,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
           >
             <div className="w-full aspect-[4/5] rounded-[12px] overflow-hidden bg-[#EAD8C3] mb-5 relative border border-[#E6D5C1]">
               <img
-                src="https://imguser.free.nf/uploads/0_1790441180_6ab7f6dc35e76_ChatGPTImageMar12202602_29_59PM.png"
+                src={rithuCardImg}
                 alt="Rithu Magazine Cover"
-                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
               />
             </div>
@@ -98,9 +97,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
           >
             <div className="w-full aspect-[4/5] rounded-[12px] overflow-hidden bg-[#EAD8C3] mb-5 relative border border-[#E6D5C1]">
               <img
-                src="https://imguser.free.nf/uploads/0_1790441528_6ab7f838f2825_IMG_60512.jpg"
+                src={cemCampusSunriseImg}
                 alt="Atmospheric festival night at Munnar campus amphitheatre"
-                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
               />
             </div>
@@ -195,25 +193,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </div>
             </div>
           </article>
-        </div>
-      </section>
-
-      {/* Curator's Note Section */}
-      <section className="max-w-[1120px] mx-auto w-full px-4 sm:px-6">
-        <div className="bg-[#F3E6D5]/70 border border-[#E6D5C1] rounded-[16px] p-8 sm:p-12 flex flex-col md:flex-row md:items-baseline justify-between gap-6 shadow-sm">
-          <div className="max-w-xl">
-            <span className="text-[12px] font-semibold text-[#800020] mb-2 block tracking-wider uppercase">
-              STUDENT EDITOR'S NOTE
-            </span>
-            <blockquote className="text-[17px] sm:text-[19px] text-[#1F040A] font-normal leading-relaxed italic font-serif">
-              “Every college life is made of seasons — moments of laughter, days of uncertainty, memories we hold on to, and new beginnings we never saw coming. Rithu brings together a few of those moments, just as we lived them.”
-            </blockquote>
-          </div>
-          <div className="text-left md:text-right">
-            <p className="text-[14px] font-semibold text-[#1F040A]">Adhil P A</p>
-            <p className="text-[12px] text-[#5C3A42]">Student Editor</p>
-            <p className="text-[12px] text-[#5C3A42]">Rithu · 2026</p>
-          </div>
         </div>
       </section>
 

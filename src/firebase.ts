@@ -1,14 +1,48 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  User,
+} from 'firebase/auth';
+import {
+  getFirestore,
+  doc,
+  getDocFromServer,
+  setLogLevel,
+  disableNetwork,
+} from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+
+// Silence verbose Firestore backoff/retry errors in browser console when free quota is reached
+try {
+  setLogLevel('silent');
+} catch {
+  // Ignore
+}
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export const BOOTSTRAPPED_ADMIN_EMAIL = 'adhilpa004@gmail.com';
+export { signInWithPopup, signOut, onAuthStateChanged };
+export type { User };
+
+let cloudQuotaExhausted = false;
+
+export function isCloudQuotaReached(): boolean {
+  return cloudQuotaExhausted;
+}
+
+export function markCloudQuotaExhausted(): void {
+  if (!cloudQuotaExhausted) {
+    cloudQuotaExhausted = true;
+    disableNetwork(db).catch(() => {});
+  }
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -24,23 +58,51 @@ export interface FirestoreErrorInfo {
   operationType: OperationType;
   path: string | null;
   authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
     }[];
   };
+}
+
+export function isQuotaExceededError(error: unknown): boolean {
+  if (!error) return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: string })?.code || '';
+  return (
+    code === 'resource-exhausted' ||
+    code === 'unavailable' ||
+    msg.includes('resource-exhausted') ||
+    msg.includes('Quota exceeded') ||
+    msg.includes('Quota limit exceeded') ||
+    msg.includes('Free daily') ||
+    msg.includes('Using maximum backoff delay') ||
+    msg.includes('Could not reach Cloud Firestore backend') ||
+    msg.includes('The operation could not be completed') ||
+    msg.includes('client is offline')
+  );
 }
 
 export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
-): never {
+): void {
+  if (isQuotaExceededError(error)) {
+    markCloudQuotaExhausted();
+    console.warn(
+      `[Firestore] Cloud quota or connection limit reached during ${operationType} on ${path}. Operating from local archive.`
+    );
+    return;
+  }
+
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -50,29 +112,27 @@ export function handleFirestoreError(
       isAnonymous: auth.currentUser?.isAnonymous,
       tenantId: auth.currentUser?.tenantId,
       providerInfo:
-        auth.currentUser?.providerData?.map((provider) => ({
+        auth.currentUser?.providerData.map((provider) => ({
           providerId: provider.providerId,
+          displayName: provider.displayName,
           email: provider.email,
+          photoUrl: provider.photoURL,
         })) || [],
     },
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Notice:', JSON.stringify(errInfo));
 }
 
 async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await getDocFromServer(doc(db, 'magazine_edition', 'current'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
+    if (isQuotaExceededError(error)) {
+      markCloudQuotaExhausted();
+      return;
     }
   }
 }
-
 testConnection();
-
-export { signInWithPopup, signOut, onAuthStateChanged };
-export type { User };

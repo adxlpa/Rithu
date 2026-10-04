@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
-import { AudioTrack, VideoItem, ViewMode, MagazinePage, MagazineEditionInfo } from '../types';
-import { renderPdfToMagazinePages, generateSamplePdfMagazine, PdfRenderProgress } from '../utils/pdfRenderer';
-import { uploadMediaFileToFirebase } from '../utils/storage';
+import {
+  AudioTrack,
+  VideoItem,
+  MagazinePage,
+  MagazineEditionInfo,
+  ViewMode,
+} from '../types';
+import {
+  renderPdfFileToMagazinePages,
+  generateSamplePdfMagazinePages,
+  PdfRenderProgress,
+} from '../utils/pdfProcessor';
+import { uploadMediaToFirestore } from '../utils/storage';
 
 interface AdminViewProps {
   audioTracks: AudioTrack[];
@@ -10,21 +20,21 @@ interface AdminViewProps {
   magazineEdition: MagazineEditionInfo;
   onUpdateMagazinePages: (
     pages: MagazinePage[],
-    info: MagazineEditionInfo,
+    edition: MagazineEditionInfo,
     onProgress?: (percent: number) => void
-  ) => Promise<void> | void;
-  onResetMagazinePages: () => Promise<void> | void;
-  onAddAudioTrack: (track: AudioTrack) => Promise<void> | void;
-  onUpdateAudioTrack: (track: AudioTrack) => Promise<void> | void;
-  onDeleteAudioTrack: (id: string) => Promise<void> | void;
-  onAddVideoItem: (video: VideoItem) => Promise<void> | void;
-  onUpdateVideoItem: (video: VideoItem) => Promise<void> | void;
-  onDeleteVideoItem: (id: string) => Promise<void> | void;
+  ) => Promise<void>;
+  onResetMagazinePages: () => Promise<void>;
+  onAddAudioTrack: (track: AudioTrack) => Promise<void>;
+  onUpdateAudioTrack: (track: AudioTrack) => Promise<void>;
+  onDeleteAudioTrack: (id: string) => Promise<void>;
+  onAddVideoItem: (video: VideoItem) => Promise<void>;
+  onUpdateVideoItem: (video: VideoItem) => Promise<void>;
+  onDeleteVideoItem: (id: string) => Promise<void>;
   onPlayAudioPreview: (track: AudioTrack) => void;
   onSelectVideoPreview: (video: VideoItem) => void;
   onNavigate: (view: ViewMode) => void;
   onSignOut: () => void;
-  adminUser?: string;
+  adminUser: string;
   isCloudSynced?: boolean;
   onConnectCloudAdmin?: () => void;
 }
@@ -46,78 +56,73 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onSelectVideoPreview,
   onNavigate,
   onSignOut,
-  adminUser = 'Editor',
+  adminUser,
 }) => {
   const [activeTab, setActiveTab] = useState<'magazine' | 'audio' | 'video'>('magazine');
-
-  // Search & Filter in Admin
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // PDF Magazine State
-  const [isRenderingPdf, setIsRenderingPdf] = useState(false);
-  const [renderProgress, setRenderProgress] = useState<PdfRenderProgress | null>(null);
-  const [pdfCloudUploadPercent, setPdfCloudUploadPercent] = useState<number | null>(null);
-  const [pdfCustomTitle, setPdfCustomTitle] = useState('');
-  const [pdfEditionYear, setPdfEditionYear] = useState('2026');
+  // Magazine state
+  const [isProcessingPdf, setIsProcessingPdf] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState<PdfRenderProgress | null>(null);
+  const [cloudSyncPercent, setCloudSyncPercent] = useState<number | null>(null);
+  const [customTitle, setCustomTitle] = useState('');
+  const [customYear, setCustomYear] = useState('2026');
 
-  // Audio Form State
+  // Audio form state
   const [editingAudioId, setEditingAudioId] = useState<string | null>(null);
   const [audioTitle, setAudioTitle] = useState('');
   const [audioAuthor, setAudioAuthor] = useState('');
-  const [audioLanguage, setAudioLanguage] = useState<'Malayalam' | 'English' | 'Bilingual'>('Malayalam');
+  const [audioLanguage, setAudioLanguage] = useState<AudioTrack['language']>('Malayalam');
   const [audioCategory, setAudioCategory] = useState<AudioTrack['category']>('Travelogue');
   const [audioDescription, setAudioDescription] = useState('');
   const [audioDuration, setAudioDuration] = useState('4:30');
   const [audioFileName, setAudioFileName] = useState('');
-  const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
-  const [audioExternalUrl, setAudioExternalUrl] = useState('');
+  const [audioFileObj, setAudioFileObj] = useState<File | null>(null);
+  const [audioUrlInput, setAudioUrlInput] = useState('');
   const [audioCoverName, setAudioCoverName] = useState('');
-  const [audioCoverDataUrl, setAudioCoverDataUrl] = useState('');
+  const [audioCoverData, setAudioCoverData] = useState('');
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [audioUploadPercent, setAudioUploadPercent] = useState(0);
 
-  // Video Form State
+  // Video form state
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
   const [videoTitle, setVideoTitle] = useState('');
   const [videoCategory, setVideoCategory] = useState('Events');
   const [videoTagline, setVideoTagline] = useState('');
   const [videoDuration, setVideoDuration] = useState('6:15');
-  const [videoDate, setVideoDate] = useState('Feb 2026');
+  const [videoDate, setVideoDate] = useState('');
   const [videoDescription, setVideoDescription] = useState('');
-  const [videoImageUrl, setVideoImageUrl] = useState('');
-  const [videoPosterFileName, setVideoPosterFileName] = useState('');
+  const [videoThumbUrl, setVideoThumbUrl] = useState('');
+  const [videoThumbName, setVideoThumbName] = useState('');
   const [videoFileName, setVideoFileName] = useState('');
-  const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
-  const [videoExternalUrl, setVideoExternalUrl] = useState('');
+  const [videoFileObj, setVideoFileObj] = useState<File | null>(null);
+  const [videoUrlInput, setVideoUrlInput] = useState('');
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [videoUploadPercent, setVideoUploadPercent] = useState(0);
 
-  // Notification Banner
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 4000);
   };
 
-  const compressImageFileToDataUrl = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
+  const compressImageFile = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const maxDim = 900;
           let w = img.width;
           let h = img.height;
-          if (w > maxDim || h > maxDim) {
+          if (w > 900 || h > 900) {
             if (w > h) {
-              h = Math.round((h * maxDim) / w);
-              w = maxDim;
+              h = Math.round((h * 900) / w);
+              w = 900;
             } else {
-              w = Math.round((w * maxDim) / h);
-              h = maxDim;
+              w = Math.round((w * 900) / h);
+              h = 900;
             }
           }
           canvas.width = w;
@@ -136,102 +141,145 @@ export const AdminView: React.FC<AdminViewProps> = ({
       reader.onerror = () => reject(new Error('Failed to read file'));
       reader.readAsDataURL(file);
     });
-  };
 
-  // Detect audio/video file duration automatically when admin selects a file
-  const detectMediaDuration = (file: File, type: 'audio' | 'video'): Promise<{ formatted: string; seconds: number } | null> => {
-    return new Promise((resolve) => {
+  const probeMediaDuration = (
+    file: File,
+    type: 'audio' | 'video'
+  ): Promise<{ formatted: string; seconds: number } | null> =>
+    new Promise((resolve) => {
       try {
-        const url = URL.createObjectURL(file);
-        const media = document.createElement(type);
-        media.preload = 'metadata';
-        media.onloadedmetadata = () => {
-          URL.revokeObjectURL(url);
-          if (media.duration && isFinite(media.duration)) {
-            const secs = Math.max(1, Math.round(media.duration));
-            const m = Math.floor(secs / 60);
-            const s = secs % 60;
-            resolve({
-              formatted: `${m}:${s < 10 ? '0' : ''}${s}`,
-              seconds: secs,
-            });
+        const blobUrl = URL.createObjectURL(file);
+        const mediaEl = document.createElement(type);
+        mediaEl.preload = 'metadata';
+        mediaEl.onloadedmetadata = () => {
+          URL.revokeObjectURL(blobUrl);
+          if (mediaEl.duration && isFinite(mediaEl.duration)) {
+            const total = Math.max(1, Math.round(mediaEl.duration));
+            const m = Math.floor(total / 60);
+            const s = total % 60;
+            resolve({ formatted: `${m}:${s < 10 ? '0' : ''}${s}`, seconds: total });
           } else {
             resolve(null);
           }
         };
-        media.onerror = () => {
-          URL.revokeObjectURL(url);
+        mediaEl.onerror = () => {
+          URL.revokeObjectURL(blobUrl);
           resolve(null);
         };
-        media.src = url;
+        mediaEl.src = blobUrl;
       } catch {
         resolve(null);
       }
     });
-  };
 
-  // PDF Magazine Handlers
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       try {
-        setIsRenderingPdf(true);
-        setPdfCloudUploadPercent(null);
-        setRenderProgress({ currentPage: 0, totalPages: 0, percent: 0 });
-        const renderedPages = await renderPdfToMagazinePages(file, (p) => setRenderProgress(p));
-        const info: MagazineEditionInfo = {
-          title: pdfCustomTitle.trim() || file.name.replace(/\.[^/.]+$/, ''),
-          year: pdfEditionYear || '2026',
+        setIsProcessingPdf(true);
+        setCloudSyncPercent(null);
+        setPdfProgress({ currentPage: 0, totalPages: 0, percent: 0 });
+        const renderedPages = await renderPdfFileToMagazinePages(file, (prog) =>
+          setPdfProgress(prog)
+        );
+        const newEdition: MagazineEditionInfo = {
+          title: customTitle.trim() || file.name.replace(/\.[^/.]+$/, ''),
+          year: customYear || '2026',
           institution: 'College of Engineering Munnar',
           totalPages: renderedPages.length,
           sourceType: 'pdf',
           fileName: file.name,
           updatedAt: 'Synced via Firebase',
         };
-        setPdfCloudUploadPercent(0);
-        await onUpdateMagazinePages(renderedPages, info, (pct) => setPdfCloudUploadPercent(pct));
-        setIsRenderingPdf(false);
-        setRenderProgress(null);
-        setPdfCloudUploadPercent(null);
-        showToast(`Uploaded "${file.name}" (${renderedPages.length} pages) to Firebase for all visitors!`);
-      } catch (err: unknown) {
-        setIsRenderingPdf(false);
-        setRenderProgress(null);
-        setPdfCloudUploadPercent(null);
-        const errorMsg = err instanceof Error ? err.message : 'Could not process PDF';
-        showToast(`PDF error: ${errorMsg}`);
+        setCloudSyncPercent(0);
+        await onUpdateMagazinePages(renderedPages, newEdition, (pct) => setCloudSyncPercent(pct));
+        setIsProcessingPdf(false);
+        setPdfProgress(null);
+        setCloudSyncPercent(null);
+        showToast(
+          `Uploaded "${file.name}" (${renderedPages.length} pages) to Firebase for all visitors!`
+        );
+      } catch (err) {
+        setIsProcessingPdf(false);
+        setPdfProgress(null);
+        setCloudSyncPercent(null);
+        const msg = err instanceof Error ? err.message : 'Could not process PDF';
+        showToast(`PDF error: ${msg}`);
       }
     }
   };
 
   const handleLoadSamplePdf = async () => {
-    setIsRenderingPdf(true);
-    setPdfCloudUploadPercent(0);
+    setIsProcessingPdf(true);
+    setCloudSyncPercent(0);
     try {
-      const samplePages = generateSamplePdfMagazine();
-      const info: MagazineEditionInfo = {
-        title: 'Rithu 2026 — Commemorative PDF Edition',
-        year: '2026',
-        institution: 'College of Engineering Munnar',
-        totalPages: samplePages.length,
-        sourceType: 'pdf',
-        fileName: 'Rithu_2026_Archival_Issue.pdf',
-        updatedAt: 'Synced via Firebase',
-      };
-      await onUpdateMagazinePages(samplePages, info, (pct) => setPdfCloudUploadPercent(pct));
+      const samplePages = generateSamplePdfMagazinePages();
+      await onUpdateMagazinePages(
+        samplePages,
+        {
+          title: 'Rithu 2026 — Commemorative PDF Edition',
+          year: '2026',
+          institution: 'College of Engineering Munnar',
+          totalPages: samplePages.length,
+          sourceType: 'pdf',
+          fileName: 'Rithu_2026_Archival_Issue.pdf',
+          updatedAt: 'Synced via Firebase',
+        },
+        (pct) => setCloudSyncPercent(pct)
+      );
       showToast(`Published Sample PDF Issue (${samplePages.length} pages) to Firebase!`);
     } finally {
-      setIsRenderingPdf(false);
-      setPdfCloudUploadPercent(null);
+      setIsProcessingPdf(false);
+      setCloudSyncPercent(null);
     }
   };
 
   const handleResetToCurated = async () => {
     await onResetMagazinePages();
-    showToast('Deleted uploaded PDF and restored default magazine issue for all visitors.');
+    showToast('Restored permanent 74-page Rithu Magazine issue.');
   };
 
-  // Submit Audio Handler (Uploads Audio File to Firebase if selected)
+  const handleUploadPagePhoto = async (
+    pageIndex: number,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressedDataUrl = await compressImageFile(file);
+      const updatedPages = magazinePages.map((pg, idx) => {
+        if (idx !== pageIndex) return pg;
+        if (pg.templateData) {
+          return {
+            ...pg,
+            templateData: {
+              ...pg.templateData,
+              image: compressedDataUrl,
+            },
+          };
+        }
+        return {
+          ...pg,
+          pdfImageUrl: compressedDataUrl,
+        };
+      });
+      await onUpdateMagazinePages(updatedPages, magazineEdition);
+      showToast(
+        `Uploaded photo for ${
+          pageIndex === 0
+            ? 'Front Cover (Page 1)'
+            : pageIndex === magazinePages.length - 1
+            ? `Back Cover (Page ${pageIndex + 1})`
+            : `Page ${pageIndex + 1}`
+        }!`
+      );
+    } catch {
+      showToast('Could not process uploaded image.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   const handleAudioSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!audioTitle.trim() || !audioAuthor.trim() || isUploadingAudio) return;
@@ -239,17 +287,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
     const parts = audioDuration.split(':');
     const mins = parseInt(parts[0] || '0', 10);
     const secs = parseInt(parts[1] || '0', 10);
-    const totalSecs = mins * 60 + secs;
+    const totalSeconds = mins * 60 + secs;
 
     setIsUploadingAudio(true);
     setAudioUploadPercent(0);
-
     try {
-      let uploadedAudioUrl = audioExternalUrl.trim();
-      if (selectedAudioFile) {
-        uploadedAudioUrl = await uploadMediaFileToFirebase(selectedAudioFile, (pct) => {
-          setAudioUploadPercent(pct);
-        });
+      let finalAudioUrl = audioUrlInput.trim();
+      if (audioFileObj) {
+        finalAudioUrl = await uploadMediaToFirestore(audioFileObj, (pct) =>
+          setAudioUploadPercent(pct)
+        );
       }
 
       if (editingAudioId) {
@@ -263,42 +310,41 @@ export const AdminView: React.FC<AdminViewProps> = ({
             category: audioCategory,
             description: audioDescription.trim() || existing.description,
             duration: audioDuration.trim(),
-            durationSeconds: totalSecs || existing.durationSeconds,
-            coverImage: audioCoverDataUrl || existing.coverImage,
-            audioUrl: uploadedAudioUrl || existing.audioUrl,
+            durationSeconds: totalSeconds || existing.durationSeconds,
+            coverImage: audioCoverData || existing.coverImage,
+            audioUrl: finalAudioUrl || existing.audioUrl,
           });
           showToast(`Updated "${audioTitle}" in Firebase across all devices.`);
         }
         setEditingAudioId(null);
       } else {
-        const newTrack: AudioTrack = {
+        await onAddAudioTrack({
           id: `audio-${Date.now()}`,
           title: audioTitle.trim(),
           author: audioAuthor.trim(),
           language: audioLanguage,
           category: audioCategory,
-          description: audioDescription.trim() || 'Archived audio piece from the Munnar Sound Archives.',
+          description:
+            audioDescription.trim() || 'Archived audio piece from the Munnar Sound Archives.',
           duration: audioDuration.trim() || '4:15',
-          durationSeconds: totalSecs || 255,
+          durationSeconds: totalSeconds || 255,
           publishedDate: 'Feb 2026',
-          ...(audioCoverDataUrl ? { coverImage: audioCoverDataUrl } : {}),
-          ...(uploadedAudioUrl ? { audioUrl: uploadedAudioUrl } : {}),
-        };
-        await onAddAudioTrack(newTrack);
+          ...(audioCoverData ? { coverImage: audioCoverData } : {}),
+          ...(finalAudioUrl ? { audioUrl: finalAudioUrl } : {}),
+        });
         showToast(`Uploaded & published "${audioTitle}" to Firebase for all visitors!`);
       }
 
-      // Reset Form
       setAudioTitle('');
       setAudioAuthor('');
       setAudioDescription('');
       setAudioFileName('');
-      setSelectedAudioFile(null);
-      setAudioExternalUrl('');
+      setAudioFileObj(null);
+      setAudioUrlInput('');
       setAudioCoverName('');
-      setAudioCoverDataUrl('');
+      setAudioCoverData('');
       setAudioDuration('4:30');
-    } catch (err: unknown) {
+    } catch (err) {
       const msg = err instanceof Error ? err.message : 'Audio upload failed.';
       showToast(`Upload error: ${msg}`);
     } finally {
@@ -307,7 +353,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const handleEditAudio = (track: AudioTrack) => {
+  const startEditAudio = (track: AudioTrack) => {
     setEditingAudioId(track.id);
     setAudioTitle(track.title);
     setAudioAuthor(track.author);
@@ -315,26 +361,29 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setAudioCategory(track.category);
     setAudioDescription(track.description);
     setAudioDuration(track.duration);
-    setAudioExternalUrl(track.audioUrl && !track.audioUrl.startsWith('firestore-media://') ? track.audioUrl : '');
-    setSelectedAudioFile(null);
-    setAudioFileName(track.audioUrl?.startsWith('firestore-media://') ? 'Stored in Firebase Cloud Vault' : '');
+    setAudioUrlInput(
+      track.audioUrl && !track.audioUrl.startsWith('firestore-media://') ? track.audioUrl : ''
+    );
+    setAudioFileObj(null);
+    setAudioFileName(
+      track.audioUrl?.startsWith('firestore-media://') ? 'Stored in Firebase Cloud Vault' : ''
+    );
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleCancelEditAudio = () => {
+  const cancelEditAudio = () => {
     setEditingAudioId(null);
     setAudioTitle('');
     setAudioAuthor('');
     setAudioDescription('');
     setAudioFileName('');
-    setSelectedAudioFile(null);
-    setAudioExternalUrl('');
+    setAudioFileObj(null);
+    setAudioUrlInput('');
     setAudioCoverName('');
-    setAudioCoverDataUrl('');
+    setAudioCoverData('');
     setAudioDuration('4:30');
   };
 
-  // Submit Video Handler (Uploads Video File to Firebase if selected)
   const handleVideoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!videoTitle.trim() || isUploadingVideo) return;
@@ -342,20 +391,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
     const parts = videoDuration.split(':');
     const mins = parseInt(parts[0] || '0', 10);
     const secs = parseInt(parts[1] || '0', 10);
-    const totalSecs = mins * 60 + secs;
-
-    const defaultImage =
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuB-gJYBvMzQrXPTgT-D-NcHUXXRAfbO4h50BvYxfVaKnxISA54fnLU65JKY-M7i8O6k4NVB5GN68Ue0-RdGzI6jd3Os8YoTI5vjtfQKAq7FZOGfdVYApQxl1zk1xc0LlNtRskp5NcrWyW0IXrfMh6Nv1tr70vS8kpK2csYdYped1QYazKl8mBJq3zZ9QpgnXV-V0MGT5lF22bbgVqIGL9YMxAzJEduT5fok0v5meB7NJrXTbOh3bC2z';
+    const totalSeconds = mins * 60 + secs;
 
     setIsUploadingVideo(true);
     setVideoUploadPercent(0);
-
     try {
-      let uploadedVideoUrl = videoExternalUrl.trim();
-      if (selectedVideoFile) {
-        uploadedVideoUrl = await uploadMediaFileToFirebase(selectedVideoFile, (pct) => {
-          setVideoUploadPercent(pct);
-        });
+      let finalVideoUrl = videoUrlInput.trim();
+      if (videoFileObj) {
+        finalVideoUrl = await uploadMediaToFirestore(videoFileObj, (pct) =>
+          setVideoUploadPercent(pct)
+        );
       }
 
       if (editingVideoId) {
@@ -367,44 +412,45 @@ export const AdminView: React.FC<AdminViewProps> = ({
             category: videoCategory,
             tagline: videoTagline.trim() || existing.tagline,
             duration: videoDuration.trim(),
-            durationSeconds: totalSecs || existing.durationSeconds,
+            durationSeconds: totalSeconds || existing.durationSeconds,
             dateStr: videoDate.trim(),
             description: videoDescription.trim(),
-            image: videoImageUrl.trim() || existing.image,
-            videoUrl: uploadedVideoUrl || existing.videoUrl,
+            image: videoThumbUrl.trim() || existing.image,
+            videoUrl: finalVideoUrl || existing.videoUrl,
           });
           showToast(`Updated video "${videoTitle}" in Firebase across all devices.`);
         }
         setEditingVideoId(null);
       } else {
-        const newVid: VideoItem = {
+        await onAddVideoItem({
           id: `vid-${Date.now()}`,
           title: videoTitle.trim(),
           category: videoCategory,
           tagline: videoTagline.trim() || 'Campus Highlights',
           duration: videoDuration.trim() || '5:00',
-          durationSeconds: totalSecs || 300,
+          durationSeconds: totalSeconds || 300,
           dateStr: videoDate.trim() || 'Feb 2026',
-          description: videoDescription.trim() || 'Preserved digital recording from Munnar campus.',
-          image: videoImageUrl.trim() || defaultImage,
+          description:
+            videoDescription.trim() || 'Preserved digital recording from Munnar campus.',
+          image:
+            videoThumbUrl.trim() ||
+            'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80',
           imageAlt: videoTitle.trim(),
-          ...(uploadedVideoUrl ? { videoUrl: uploadedVideoUrl } : {}),
-        };
-        await onAddVideoItem(newVid);
+          ...(finalVideoUrl ? { videoUrl: finalVideoUrl } : {}),
+        });
         showToast(`Uploaded & published "${videoTitle}" to Firebase for all visitors!`);
       }
 
-      // Reset Form
       setVideoTitle('');
       setVideoTagline('');
       setVideoDescription('');
       setVideoFileName('');
-      setSelectedVideoFile(null);
-      setVideoExternalUrl('');
-      setVideoImageUrl('');
-      setVideoPosterFileName('');
+      setVideoFileObj(null);
+      setVideoUrlInput('');
+      setVideoThumbUrl('');
+      setVideoThumbName('');
       setVideoDuration('6:15');
-    } catch (err: unknown) {
+    } catch (err) {
       const msg = err instanceof Error ? err.message : 'Video upload failed.';
       showToast(`Upload error: ${msg}`);
     } finally {
@@ -413,7 +459,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const handleEditVideo = (video: VideoItem) => {
+  const startEditVideo = (video: VideoItem) => {
     setEditingVideoId(video.id);
     setVideoTitle(video.title);
     setVideoCategory(video.category);
@@ -421,27 +467,30 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setVideoDuration(video.duration);
     setVideoDate(video.dateStr);
     setVideoDescription(video.description || '');
-    setVideoImageUrl(video.image || '');
-    setVideoExternalUrl(video.videoUrl && !video.videoUrl.startsWith('firestore-media://') ? video.videoUrl : '');
-    setSelectedVideoFile(null);
-    setVideoFileName(video.videoUrl?.startsWith('firestore-media://') ? 'Stored in Firebase Cloud Vault' : '');
+    setVideoThumbUrl(video.image || '');
+    setVideoUrlInput(
+      video.videoUrl && !video.videoUrl.startsWith('firestore-media://') ? video.videoUrl : ''
+    );
+    setVideoFileObj(null);
+    setVideoFileName(
+      video.videoUrl?.startsWith('firestore-media://') ? 'Stored in Firebase Cloud Vault' : ''
+    );
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleCancelEditVideo = () => {
+  const cancelEditVideo = () => {
     setEditingVideoId(null);
     setVideoTitle('');
     setVideoTagline('');
     setVideoDescription('');
     setVideoFileName('');
-    setSelectedVideoFile(null);
-    setVideoExternalUrl('');
-    setVideoImageUrl('');
-    setVideoPosterFileName('');
+    setVideoFileObj(null);
+    setVideoUrlInput('');
+    setVideoThumbUrl('');
+    setVideoThumbName('');
     setVideoDuration('6:15');
   };
 
-  // Filtered lists
   const filteredAudio = audioTracks.filter(
     (t) =>
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -460,17 +509,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
     <div className="w-full bg-[#FFF9F2] text-[#1F040A] min-h-[calc(100vh-4rem)] flex justify-center py-8 sm:py-14 animate-fadeIn">
       <main className="w-full max-w-[1120px] mx-auto px-4 sm:px-6 flex justify-center">
         <div className="w-full max-w-[820px] flex flex-col gap-8 sm:gap-10">
-          {/* Toast message */}
-          {toastMessage && (
+          {toastMsg && (
             <div className="bg-[#FFF9F2] text-[#1F040A] px-4 py-3 rounded-xl shadow-lg border border-[#800020]/30 flex items-center justify-between text-[14px]">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[18px] text-[#800020]">
                   check_circle
                 </span>
-                <span className="font-medium">{toastMessage}</span>
+                <span className="font-medium">{toastMsg}</span>
               </div>
               <button
-                onClick={() => setToastMessage(null)}
+                onClick={() => setToastMsg(null)}
                 className="text-[#5C3A42] hover:text-[#1F040A] cursor-pointer"
               >
                 ✕
@@ -478,7 +526,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
           )}
 
-          {/* Top Admin Header / Utility Bar */}
           <header className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E6D5C1]">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
               <div className="flex flex-col">
@@ -492,11 +539,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   </span>
                 </div>
                 <span className="text-[12px] text-[#5C3A42]">
-                  Signed in as <strong className="text-[#1F040A]">{adminUser}</strong> · Uploads appear for all visitors without login
+                  Signed in as <strong className="text-[#1F040A]">{adminUser}</strong> · Uploads
+                  appear for all visitors without login
                 </span>
               </div>
 
-              {/* Tabs for Magazine/PDF, Audio, Video */}
               <nav
                 aria-label="Content Type Toggle"
                 className="flex items-center gap-1 p-1 bg-[#F3E6D5] border border-[#E6D5C1] rounded-xl flex-wrap"
@@ -512,10 +559,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       ? 'bg-[#800020] text-[#FFF9F2] shadow-xs'
                       : 'text-[#5C3A42] hover:text-[#1F040A]'
                   }`}
-                  id="tab-magazine"
                 >
-                  <span className="material-symbols-outlined text-[18px]">auto_stories</span>
-                  <span>Magazine / PDF ({magazinePages.length})</span>
+                  <span>Magazine PDF</span>
+                  <span className="text-[11px] opacity-75">({magazinePages.length}p)</span>
                 </button>
                 <button
                   type="button"
@@ -528,10 +574,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       ? 'bg-[#800020] text-[#FFF9F2] shadow-xs'
                       : 'text-[#5C3A42] hover:text-[#1F040A]'
                   }`}
-                  id="tab-audio"
                 >
-                  <span className="material-symbols-outlined text-[18px]">audiotrack</span>
-                  <span>Audio ({audioTracks.length})</span>
+                  <span>Audio</span>
+                  <span className="text-[11px] opacity-75">({audioTracks.length})</span>
                 </button>
                 <button
                   type="button"
@@ -544,10 +589,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       ? 'bg-[#800020] text-[#FFF9F2] shadow-xs'
                       : 'text-[#5C3A42] hover:text-[#1F040A]'
                   }`}
-                  id="tab-video"
                 >
-                  <span className="material-symbols-outlined text-[18px]">video_library</span>
-                  <span>Video ({videoItems.length})</span>
+                  <span>Video</span>
+                  <span className="text-[11px] opacity-75">({videoItems.length})</span>
                 </button>
               </nav>
             </div>
@@ -555,25 +599,23 @@ export const AdminView: React.FC<AdminViewProps> = ({
             <div className="flex items-center gap-3 self-end sm:self-center">
               <button
                 onClick={() => onNavigate('home')}
-                className="text-[13px] font-medium text-[#5C3A42] hover:text-[#1F040A] px-2.5 py-1 rounded-md hover:bg-[#F3E6D5] transition-colors cursor-pointer whitespace-nowrap"
+                className="text-[13px] text-[#5C3A42] hover:text-[#1F040A] transition-colors cursor-pointer"
               >
                 View Site
               </button>
               <button
                 onClick={onSignOut}
-                className="group flex items-center gap-1.5 text-[13px] font-medium text-[#800020] hover:bg-[#F3E6D5] px-2.5 py-1 rounded-md transition-colors duration-150 cursor-pointer whitespace-nowrap"
+                className="text-[13px] text-[#800020] hover:text-[#D45060] font-medium transition-colors flex items-center gap-1 group cursor-pointer"
               >
                 <span>Sign Out</span>
-                <span className="text-sm opacity-70 group-hover:opacity-100">⎋</span>
+                <span className="text-xs opacity-70 group-hover:opacity-100">⎋</span>
               </button>
             </div>
           </header>
 
-          {/* Main Admin Workspace Container */}
           <div className="w-full flex flex-col gap-10">
             {activeTab === 'magazine' ? (
               <div className="flex flex-col gap-8">
-                {/* Active Magazine Status & Quick Actions */}
                 <section className="bg-[#F3E6D5]/70 p-5 sm:p-7 rounded-2xl border border-[#E6D5C1] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
                     <div className="w-12 h-12 rounded-xl bg-[#FFF9F2] border border-[#E6D5C1] flex items-center justify-center text-[#800020] flex-shrink-0">
@@ -581,7 +623,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     </div>
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">
-                        <span className="inline-block w-2 h-2 rounded-full bg-[#800020]"></span>
+                        <span className="inline-block w-2 h-2 rounded-full bg-[#800020]" />
                         <span className="text-[12px] font-semibold uppercase tracking-wider text-[#800020]">
                           Active Live Issue
                         </span>
@@ -596,7 +638,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         {magazineEdition.title}
                       </h2>
                       <span className="text-[12px] text-[#5C3A42]">
-                        {magazinePages.length} Pages · Year {magazineEdition.year} · {magazineEdition.institution}
+                        {magazinePages.length} Pages · Year {magazineEdition.year} ·{' '}
+                        {magazineEdition.institution}
                       </span>
                     </div>
                   </div>
@@ -624,7 +667,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   </div>
                 </section>
 
-                {/* PDF Upload Card */}
                 <section className="bg-[#F3E6D5]/50 p-5 sm:p-8 rounded-2xl border border-[#E6D5C1] flex flex-col gap-6">
                   <div className="flex flex-col gap-1 pb-4 border-b border-[#E6D5C1]">
                     <div className="flex items-center gap-2">
@@ -636,11 +678,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </h3>
                     </div>
                     <p className="text-[13px] sm:text-[14px] text-[#5C3A42]">
-                      Upload an official college magazine PDF from your device. Each page is rendered and stored in Firebase Firestore so every visitor can flip through the 3D magazine without logging in.
+                      Upload an official college magazine PDF from your device. Each page is
+                      rendered and stored in Firebase Firestore so every visitor can flip through
+                      the 3D magazine without logging in.
                     </p>
                   </div>
 
-                  {/* Form fields: optional custom title & edition */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[13px] font-medium text-[#5C3A42]">
@@ -649,66 +692,66 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <input
                         type="text"
                         placeholder="e.g. Rithu 2026 — Annual Magazine"
-                        value={pdfCustomTitle}
-                        onChange={(e) => setPdfCustomTitle(e.target.value)}
+                        value={customTitle}
+                        onChange={(e) => setCustomTitle(e.target.value)}
                         className="h-[42px] px-3.5 rounded-[10px] bg-white border border-[#E6D5C1] text-[#1F040A] placeholder-[#5C3A42]/50 text-[14px] outline-none focus:border-[#800020] focus:ring-2 focus:ring-[#800020]/15"
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[13px] font-medium text-[#5C3A42]">
-                        Edition Year
-                      </label>
+                      <label className="text-[13px] font-medium text-[#5C3A42]">Edition Year</label>
                       <input
                         type="text"
                         placeholder="2026"
-                        value={pdfEditionYear}
-                        onChange={(e) => setPdfEditionYear(e.target.value)}
+                        value={customYear}
+                        onChange={(e) => setCustomYear(e.target.value)}
                         className="h-[42px] px-3.5 rounded-[10px] bg-white border border-[#E6D5C1] text-[#1F040A] placeholder-[#5C3A42]/50 text-[14px] outline-none focus:border-[#800020] focus:ring-2 focus:ring-[#800020]/15"
                       />
                     </div>
                   </div>
 
-                  {/* PDF Drag & Drop Zone */}
                   <div className="flex flex-col gap-2">
                     <label className="group relative flex flex-col items-center justify-center p-8 sm:p-10 rounded-xl border-2 border-dashed border-[#D5C1AD] hover:border-[#800020] bg-[#FFF9F2] hover:bg-[#F3E6D5]/50 cursor-pointer transition-all duration-200">
                       <input
                         type="file"
                         accept="application/pdf,.pdf"
                         className="sr-only"
-                        disabled={isRenderingPdf}
+                        disabled={isProcessingPdf}
                         onChange={handlePdfUpload}
                       />
-
-                      {isRenderingPdf ? (
+                      {isProcessingPdf ? (
                         <div className="w-full max-w-[360px] flex flex-col items-center gap-3">
-                          <div className="w-10 h-10 border-3 border-[#800020] border-t-transparent rounded-full animate-spin"></div>
+                          <div className="w-10 h-10 border-3 border-[#800020] border-t-transparent rounded-full animate-spin" />
                           <span className="text-[14px] font-semibold text-[#1F040A]">
-                            {pdfCloudUploadPercent !== null
-                              ? `Syncing PDF to Firebase Cloud (${pdfCloudUploadPercent}%)`
-                              : `Rendering PDF Pages (${renderProgress?.percent || 0}%)`}
+                            {cloudSyncPercent === null
+                              ? `Rendering PDF Pages (${pdfProgress?.percent || 0}%)`
+                              : `Syncing PDF to Firebase Cloud (${cloudSyncPercent}%)`}
                           </span>
                           <span className="text-[12px] text-[#5C3A42] text-center">
-                            {pdfCloudUploadPercent !== null
-                              ? 'Publishing pages to Firebase so all visitors see the new PDF without login...'
-                              : `Processing page ${renderProgress?.currentPage || 0} of ${renderProgress?.totalPages || 0}...`}
+                            {cloudSyncPercent === null
+                              ? `Processing page ${pdfProgress?.currentPage || 0} of ${
+                                  pdfProgress?.totalPages || 0
+                                }...`
+                              : 'Publishing pages to Firebase so all visitors see the new PDF without login...'}
                           </span>
                           <div className="w-full bg-[#F3E6D5] h-2 rounded-full overflow-hidden border border-[#E6D5C1]">
                             <div
                               className="bg-[#800020] h-full transition-all duration-150"
                               style={{
                                 width: `${
-                                  pdfCloudUploadPercent !== null
-                                    ? pdfCloudUploadPercent
-                                    : renderProgress?.percent || 0
+                                  cloudSyncPercent === null
+                                    ? pdfProgress?.percent || 0
+                                    : cloudSyncPercent
                                 }%`,
                               }}
-                            ></div>
+                            />
                           </div>
                         </div>
                       ) : (
                         <>
                           <div className="w-14 h-14 rounded-full bg-[#F3E6D5] border border-[#E6D5C1] flex items-center justify-center text-[#800020] mb-2 group-hover:scale-110 transition-transform shadow-xs">
-                            <span className="material-symbols-outlined text-[30px]">picture_as_pdf</span>
+                            <span className="material-symbols-outlined text-[30px]">
+                              picture_as_pdf
+                            </span>
                           </div>
                           <span className="text-[15px] font-semibold text-[#1F040A]">
                             Drop your magazine PDF here, or click to browse
@@ -720,7 +763,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       )}
                     </label>
 
-                    {/* Instant sample button */}
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                       <span className="text-[12px] text-[#5C3A42]">
                         Need to test right away without an external file?
@@ -728,11 +770,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <button
                         type="button"
                         onClick={handleLoadSamplePdf}
-                        disabled={isRenderingPdf}
+                        disabled={isProcessingPdf}
                         className="px-3.5 py-1.5 rounded-lg border border-[#800020]/30 bg-[#FFF9F2] hover:bg-[#F3E6D5] text-[#800020] text-[13px] font-medium transition-colors cursor-pointer flex items-center gap-1.5"
                       >
                         <span className="material-symbols-outlined text-[16px]">file_open</span>
-                        <span>Load Sample PDF Issue (8 Pages)</span>
+                        <span>Load Sample PDF Issue (74 Pages)</span>
                       </button>
                     </div>
                   </div>
@@ -740,66 +782,82 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                 {/* Rendered Folio & Spread Gallery */}
                 <section className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <h3 className="text-[19px] sm:text-[20px] font-semibold text-[#1F040A] tracking-tight">
-                        Magazine Spreads & Pages
+                        Permanent Magazine Pages & Photos
                       </h3>
                       <span className="text-[13px] text-[#5C3A42] font-medium">
                         · {magazinePages.length} Pages Total
                       </span>
                     </div>
                     <span className="text-[12px] text-[#5C3A42]">
-                      Click any page to preview in reader
+                      Click any page to preview · Use "Upload Photo" on any card to update its
+                      cover/page photo
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {magazinePages.map((page, idx) => {
-                      const isCover = idx === 0;
-                      const isBack = idx === magazinePages.length - 1;
+                    {magazinePages.map((page, index) => {
+                      const isCover = index === 0;
+                      const isBack = index === magazinePages.length - 1;
+                      const previewImg = page.pdfImageUrl || page.templateData?.image;
+
                       return (
                         <div
                           key={page.id}
                           onClick={() => onNavigate('magazine')}
                           className="group bg-[#F3E6D5]/60 rounded-xl border border-[#E6D5C1] p-3 hover:border-[#800020]/50 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
                         >
-                          <div className="w-full aspect-[1/1.35] bg-[#FFF9F2] rounded-lg overflow-hidden relative border border-[#E6D5C1] flex items-center justify-center">
-                            {page.pdfImageUrl ? (
+                          <div
+                            className="w-full aspect-[1/1.35] rounded-lg overflow-hidden relative border border-[#E6D5C1] flex items-center justify-center"
+                            style={{
+                              backgroundColor: page.templateData?.bgColor || '#FFF9F2',
+                            }}
+                          >
+                            {previewImg ? (
                               <img
-                                src={page.pdfImageUrl}
-                                alt={page.title || `Page ${idx + 1}`}
+                                src={previewImg}
+                                alt={page.title || `Page ${index + 1}`}
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               />
                             ) : (
-                              <div className="w-full h-full p-3 flex flex-col justify-between bg-[#FFF9F2] text-[#1F040A]">
-                                <span className="text-[9px] font-mono text-[#800020] font-semibold">
-                                  {isCover ? 'COVER' : isBack ? 'BACK' : `PAGE ${idx + 1}`}
+                              <div className="p-3 text-center flex flex-col items-center justify-center gap-1">
+                                <span className="text-[10px] font-mono uppercase tracking-widest text-[#800020] font-bold">
+                                  P. {index + 1}
                                 </span>
-                                <span className="text-[12px] font-bold line-clamp-2 font-serif">
-                                  {page.title || 'Spread'}
+                                <span className="text-[12px] font-serif font-bold text-[#1F040A] line-clamp-3">
+                                  {page.title || page.templateData?.title || `Page ${index + 1}`}
                                 </span>
-                                <span className="text-[8px] text-[#5C3A42]">Rithu Editorial</span>
                               </div>
                             )}
-
-                            {/* Page number label */}
-                            <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-[#FFF9F2]/90 backdrop-blur-xs text-[10px] font-semibold text-[#1F040A] border border-[#E6D5C1]">
-                              {isCover ? 'Cover' : isBack ? 'Back' : `P. ${idx + 1}`}
-                            </div>
+                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-[#1F040A]/80 text-[#FFF9F2] text-[10px] font-semibold">
+                              {isCover ? 'Front Cover' : isBack ? 'Back Cover' : `P.${index + 1}`}
+                            </span>
                           </div>
 
-                          <div className="flex flex-col mt-2 min-w-0">
-                            <span className="text-[13px] font-medium text-[#1F040A] truncate group-hover:text-[#800020] transition-colors">
-                              {page.title || (isCover ? 'Front Cover' : isBack ? 'Back Cover' : `Page ${idx + 1}`)}
-                            </span>
-                            <span className="text-[11px] text-[#5C3A42]">
-                              {isCover
-                                ? 'Single Page (Closed)'
-                                : isBack
-                                ? 'Single Page (Closed)'
-                                : 'Dual Spread Leaf'}
-                            </span>
+                          <div className="mt-2.5 flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[12px] font-semibold text-[#1F040A] truncate">
+                                {page.title || `Page ${index + 1}`}
+                              </span>
+                            </div>
+
+                            <label
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-full py-1.5 px-2 rounded-lg bg-[#FFF9F2] hover:bg-[#800020] text-[#800020] hover:text-[#FFF9F2] border border-[#800020]/25 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="sr-only"
+                                onChange={(e) => handleUploadPagePhoto(index, e)}
+                              />
+                              <span className="material-symbols-outlined text-[14px]">
+                                add_a_photo
+                              </span>
+                              <span>{isCover ? 'Upload Cover Photo' : 'Upload Photo'}</span>
+                            </label>
                           </div>
                         </div>
                       );
@@ -809,13 +867,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
             ) : activeTab === 'audio' ? (
               <>
-                {/* Section: Add / Edit Audio */}
                 <section className="bg-[#F3E6D5]/50 p-5 sm:p-8 lg:p-10 rounded-2xl border border-[#E6D5C1] flex flex-col gap-6">
                   <div className="flex flex-col gap-1 pb-4 border-b border-[#E6D5C1]">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-[#800020]">
-                          {editingAudioId ? 'edit_note' : 'add_circle'}
+                          {editingAudioId ? 'edit_note' : 'mic'}
                         </span>
                         <h2 className="text-[19px] sm:text-[20px] font-semibold text-[#1F040A] tracking-tight">
                           {editingAudioId ? 'Edit Audio Record' : 'Upload Audio to Firebase'}
@@ -824,7 +881,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       {editingAudioId && (
                         <button
                           type="button"
-                          onClick={handleCancelEditAudio}
+                          onClick={cancelEditAudio}
                           className="text-[13px] text-[#800020] hover:underline cursor-pointer font-medium"
                         >
                           Cancel Editing
@@ -832,19 +889,19 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       )}
                     </div>
                     <p className="text-[13px] sm:text-[14px] text-[#5C3A42]">
-                      Upload an audio file from your device (MP3, WAV, M4A) or provide a stream link. The uploaded file is stored directly in Firebase so everyone can listen without logging in.
+                      Upload an audio file from your device (MP3, WAV, M4A) or provide a stream
+                      link. The uploaded file is stored directly in Firebase so everyone can listen
+                      without logging in.
                     </p>
                   </div>
 
-                  <form
-                    className="flex flex-col gap-6"
-                    id="audio-entry-form"
-                    onSubmit={handleAudioSubmit}
-                  >
-                    {/* Row 1: Title & Contributor */}
+                  <form className="flex flex-col gap-6" id="audio-entry-form" onSubmit={handleAudioSubmit}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[13px] font-medium text-[#5C3A42]" htmlFor="track-title">
+                        <label
+                          className="text-[13px] font-medium text-[#5C3A42]"
+                          htmlFor="track-title"
+                        >
                           Title *
                         </label>
                         <input
@@ -876,7 +933,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Row 2: Language & Tag Selection & Duration */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
                       <div className="flex flex-col gap-1.5">
                         <label
@@ -891,7 +947,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             id="track-language"
                             value={audioLanguage}
                             onChange={(e) =>
-                              setAudioLanguage(e.target.value as 'Malayalam' | 'English' | 'Bilingual')
+                              setAudioLanguage(e.target.value as AudioTrack['language'])
                             }
                           >
                             <option value="Malayalam">Malayalam</option>
@@ -934,7 +990,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </div>
 
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[13px] font-medium text-[#5C3A42]">Duration (mm:ss)</label>
+                        <label className="text-[13px] font-medium text-[#5C3A42]">
+                          Duration (mm:ss)
+                        </label>
                         <input
                           className="h-[44px] px-3.5 rounded-[10px] bg-white border border-[#E6D5C1] text-[#1F040A] placeholder-[#5C3A42]/50 text-[15px] outline-none focus:border-[#800020] focus:ring-2 focus:ring-[#800020]/15 transition-all duration-150"
                           placeholder="e.g. 5:32"
@@ -945,7 +1003,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Row 3: Description Field */}
                     <div className="flex flex-col gap-1.5">
                       <label
                         className="text-[13px] font-medium text-[#5C3A42]"
@@ -960,12 +1017,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         rows={2}
                         value={audioDescription}
                         onChange={(e) => setAudioDescription(e.target.value)}
-                      ></textarea>
+                      />
                     </div>
 
-                    {/* Row 4: File Attachments Dropzones */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 pt-1">
-                      {/* Audio File Dropzone */}
                       <div className="flex flex-col gap-1.5">
                         <label className="text-[13px] font-medium text-[#5C3A42]">
                           Upload Audio File (Stored in Firebase)
@@ -979,12 +1034,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             onChange={async (e) => {
                               if (e.target.files && e.target.files[0]) {
                                 const file = e.target.files[0];
-                                setSelectedAudioFile(file);
+                                setAudioFileObj(file);
                                 setAudioFileName(file.name);
-                                const detected = await detectMediaDuration(file, 'audio');
-                                if (detected) {
-                                  setAudioDuration(detected.formatted);
-                                }
+                                const probed = await probeMediaDuration(file, 'audio');
+                                if (probed) setAudioDuration(probed.formatted);
                               }
                             }}
                           />
@@ -1000,9 +1053,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         </label>
                       </div>
 
-                      {/* Cover Art Dropzone */}
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[13px] font-medium text-[#5C3A42]">Cover Art (Optional)</label>
+                        <label className="text-[13px] font-medium text-[#5C3A42]">
+                          Cover Art (Optional)
+                        </label>
                         <label className="group relative flex flex-col items-center justify-center p-5 rounded-[10px] border border-dashed border-[#D5C1AD] bg-[#FFF9F2] hover:bg-[#F3E6D5]/60 hover:border-[#800020] cursor-pointer transition-all duration-200">
                           <input
                             accept="image/*"
@@ -1014,10 +1068,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                                 const file = e.target.files[0];
                                 setAudioCoverName(file.name);
                                 try {
-                                  const compressed = await compressImageFileToDataUrl(file);
-                                  setAudioCoverDataUrl(compressed);
+                                  const compressed = await compressImageFile(file);
+                                  setAudioCoverData(compressed);
                                 } catch {
-                                  // Keep filename if compression fails
+                                  // Ignore
                                 }
                               }
                             }}
@@ -1039,7 +1093,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <div className="p-4 rounded-xl bg-[#FFF9F2] border border-[#E6D5C1] flex flex-col gap-2">
                         <div className="flex items-center justify-between text-[13px] font-medium text-[#1F040A]">
                           <span>Uploading audio file to Firebase Cloud Vault...</span>
-                          <span className="tabular-nums text-[#800020] font-semibold">{audioUploadPercent}%</span>
+                          <span className="tabular-nums text-[#800020] font-semibold">
+                            {audioUploadPercent}%
+                          </span>
                         </div>
                         <div className="w-full h-2 bg-[#F3E6D5] rounded-full overflow-hidden">
                           <div
@@ -1050,16 +1106,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </div>
                     )}
 
-                    {/* Action Bar */}
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-[#E6D5C1]">
                       <span className="text-[12px] text-[#5C3A42]">
-                        Uploaded audio is stored in Firebase and immediately playable by all visitors.
+                        Uploaded audio immediately appears in the Audio section for all users.
                       </span>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                         {editingAudioId && (
                           <button
                             type="button"
-                            onClick={handleCancelEditAudio}
+                            onClick={cancelEditAudio}
                             className="px-4 py-2 text-[14px] font-medium text-[#5C3A42] hover:text-[#1F040A] cursor-pointer"
                           >
                             Cancel
@@ -1067,21 +1122,20 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         )}
                         <button
                           disabled={isUploadingAudio}
-                          className="inline-flex items-center justify-center min-h-[44px] px-6 rounded-[10px] bg-[#800020] hover:bg-[#660019] text-[#FFF9F2] text-[15px] font-semibold active:scale-[0.98] shadow-md shadow-[#800020]/20 transition-all duration-150 whitespace-nowrap cursor-pointer disabled:opacity-60"
+                          className="w-full sm:w-auto inline-flex items-center justify-center min-h-[44px] px-6 rounded-[10px] bg-[#800020] hover:bg-[#660019] text-[#FFF9F2] text-[15px] font-semibold active:scale-[0.98] shadow-md shadow-[#800020]/20 transition-all duration-150 whitespace-nowrap cursor-pointer disabled:opacity-60"
                           type="submit"
                         >
                           {isUploadingAudio
                             ? `Uploading (${audioUploadPercent}%)...`
                             : editingAudioId
-                            ? 'Update Audio'
-                            : 'Publish Audio'}
+                            ? 'Update Audio Track'
+                            : 'Publish Audio Track'}
                         </button>
                       </div>
                     </div>
                   </form>
                 </section>
 
-                {/* Section: Published Content with Search */}
                 <section className="flex flex-col gap-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
                     <div className="flex items-center gap-2">
@@ -1092,7 +1146,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         · {audioTracks.length} tracks
                       </span>
                     </div>
-
                     <div className="relative">
                       <input
                         type="text"
@@ -1140,7 +1193,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                                 {track.audioUrl && (
                                   <>
                                     <span>·</span>
-                                    <span className="text-[#800020] font-medium">Firebase Audio</span>
+                                    <span className="text-[#800020] font-medium">
+                                      Firebase Audio
+                                    </span>
                                   </>
                                 )}
                               </div>
@@ -1149,7 +1204,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                           <div className="flex items-center gap-2 self-end sm:self-center pl-4 sm:pl-0">
                             <button
-                              onClick={() => handleEditAudio(track)}
+                              onClick={() => startEditAudio(track)}
                               className="px-3 py-1.5 rounded-md text-[13px] font-medium text-[#5C3A42] hover:text-[#1F040A] hover:bg-[#FFF9F2] transition-colors cursor-pointer"
                             >
                               Edit
@@ -1190,7 +1245,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </>
             ) : (
               <>
-                {/* Section: Add / Edit Video */}
                 <section className="bg-[#F3E6D5]/50 p-5 sm:p-8 lg:p-10 rounded-2xl border border-[#E6D5C1] flex flex-col gap-6">
                   <div className="flex flex-col gap-1 pb-4 border-b border-[#E6D5C1]">
                     <div className="flex items-center justify-between">
@@ -1205,7 +1259,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       {editingVideoId && (
                         <button
                           type="button"
-                          onClick={handleCancelEditVideo}
+                          onClick={cancelEditVideo}
                           className="text-[13px] text-[#800020] hover:underline cursor-pointer font-medium"
                         >
                           Cancel Editing
@@ -1213,7 +1267,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       )}
                     </div>
                     <p className="text-[13px] sm:text-[14px] text-[#5C3A42]">
-                      Upload a video file from your device (MP4, WebM, MOV) or paste a YouTube / direct video link. Uploaded video files are stored in Firebase so any visitor can watch without logging in.
+                      Upload a video file from your device (MP4, WebM, MOV) or paste a YouTube /
+                      direct video link. Uploaded video files are stored in Firebase so any visitor
+                      can watch without logging in.
                     </p>
                   </div>
 
@@ -1271,7 +1327,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[13px] font-medium text-[#5C3A42]">Duration (mm:ss)</label>
+                        <label className="text-[13px] font-medium text-[#5C3A42]">
+                          Duration (mm:ss)
+                        </label>
                         <input
                           className="h-[44px] px-3.5 rounded-[10px] bg-white border border-[#E6D5C1] text-[#1F040A] placeholder-[#5C3A42]/50 text-[15px] outline-none focus:border-[#800020] focus:ring-2 focus:ring-[#800020]/15"
                           placeholder="e.g. 8:42"
@@ -1292,10 +1350,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         rows={2}
                         value={videoDescription}
                         onChange={(e) => setVideoDescription(e.target.value)}
-                      ></textarea>
+                      />
                     </div>
 
-                    {/* Video File + Thumbnail Dropzones */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-[13px] font-medium text-[#5C3A42]">
@@ -1310,12 +1367,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             onChange={async (e) => {
                               if (e.target.files && e.target.files[0]) {
                                 const file = e.target.files[0];
-                                setSelectedVideoFile(file);
+                                setVideoFileObj(file);
                                 setVideoFileName(file.name);
-                                const detected = await detectMediaDuration(file, 'video');
-                                if (detected) {
-                                  setVideoDuration(detected.formatted);
-                                }
+                                const probed = await probeMediaDuration(file, 'video');
+                                if (probed) setVideoDuration(probed.formatted);
                               }
                             }}
                           />
@@ -1323,17 +1378,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             video_file
                           </span>
                           <span className="text-[13px] text-[#1F040A] font-medium text-center truncate max-w-full px-2">
-                            {videoFileName || 'Choose Video File from Device...'}
+                            {videoFileName || 'Choose Video File (MP4, WebM, MOV)...'}
                           </span>
                           <span className="text-[11px] text-[#5C3A42] mt-0.5">
-                            MP4, WebM, MOV · Stored in Firebase
+                            Stored in Firebase Cloud Vault
                           </span>
                         </label>
                       </div>
 
                       <div className="flex flex-col gap-1.5">
                         <label className="text-[13px] font-medium text-[#5C3A42]">
-                          Upload Thumbnail Poster Image (Optional)
+                          Upload Thumbnail Image
                         </label>
                         <label className="group relative flex flex-col items-center justify-center p-4 rounded-[10px] border border-dashed border-[#D5C1AD] bg-[#FFF9F2] hover:bg-[#F3E6D5]/60 hover:border-[#800020] cursor-pointer transition-all duration-200">
                           <input
@@ -1344,10 +1399,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             onChange={async (e) => {
                               if (e.target.files && e.target.files[0]) {
                                 const file = e.target.files[0];
-                                setVideoPosterFileName(file.name);
+                                setVideoThumbName(file.name);
                                 try {
-                                  const compressed = await compressImageFileToDataUrl(file);
-                                  setVideoImageUrl(compressed);
+                                  const compressed = await compressImageFile(file);
+                                  setVideoThumbUrl(compressed);
                                 } catch {
                                   // Ignore
                                 }
@@ -1358,7 +1413,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             add_photo_alternate
                           </span>
                           <span className="text-[13px] text-[#1F040A] font-medium text-center truncate max-w-full px-2">
-                            {videoPosterFileName || 'Choose Poster Image...'}
+                            {videoThumbName || 'Choose Poster Image...'}
                           </span>
                           <span className="text-[11px] text-[#5C3A42] mt-0.5">
                             16:9 thumbnail image (JPG, PNG)
@@ -1367,7 +1422,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Optional Video URL or Thumbnail URL */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-[13px] font-medium text-[#5C3A42]">
@@ -1377,8 +1431,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
                           className="h-[42px] px-3.5 rounded-[10px] bg-white border border-[#E6D5C1] text-[#1F040A] placeholder-[#5C3A42]/50 text-[14px] outline-none focus:border-[#800020]"
                           placeholder="https://youtube.com/watch?v=... or .mp4 URL"
                           type="text"
-                          value={videoExternalUrl}
-                          onChange={(e) => setVideoExternalUrl(e.target.value)}
+                          value={videoUrlInput}
+                          onChange={(e) => setVideoUrlInput(e.target.value)}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
@@ -1389,8 +1443,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
                           className="h-[42px] px-3.5 rounded-[10px] bg-white border border-[#E6D5C1] text-[#1F040A] placeholder-[#5C3A42]/50 text-[14px] outline-none focus:border-[#800020]"
                           placeholder="https://..."
                           type="text"
-                          value={videoImageUrl.startsWith('data:') ? '' : videoImageUrl}
-                          onChange={(e) => setVideoImageUrl(e.target.value)}
+                          value={videoThumbUrl.startsWith('data:') ? '' : videoThumbUrl}
+                          onChange={(e) => setVideoThumbUrl(e.target.value)}
                         />
                       </div>
                     </div>
@@ -1399,7 +1453,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <div className="p-4 rounded-xl bg-[#FFF9F2] border border-[#E6D5C1] flex flex-col gap-2">
                         <div className="flex items-center justify-between text-[13px] font-medium text-[#1F040A]">
                           <span>Uploading video file to Firebase Cloud Vault...</span>
-                          <span className="tabular-nums text-[#800020] font-semibold">{videoUploadPercent}%</span>
+                          <span className="tabular-nums text-[#800020] font-semibold">
+                            {videoUploadPercent}%
+                          </span>
                         </div>
                         <div className="w-full h-2 bg-[#F3E6D5] rounded-full overflow-hidden">
                           <div
@@ -1414,7 +1470,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       {editingVideoId && (
                         <button
                           type="button"
-                          onClick={handleCancelEditVideo}
+                          onClick={cancelEditVideo}
                           className="px-4 py-2 text-[14px] font-medium text-[#5C3A42] hover:text-[#1F040A] cursor-pointer"
                         >
                           Cancel
@@ -1435,7 +1491,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   </form>
                 </section>
 
-                {/* Section: Published Videos with Search */}
                 <section className="flex flex-col gap-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
                     <div className="flex items-center gap-2">
@@ -1446,7 +1501,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         · {videoItems.length} videos
                       </span>
                     </div>
-
                     <div className="relative">
                       <input
                         type="text"
@@ -1496,7 +1550,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                                 {video.title}
                               </span>
                               <div className="flex items-center gap-2 text-[12px] text-[#5C3A42] flex-wrap">
-                                <span className="font-semibold text-[#800020]">{video.category}</span>
+                                <span className="font-semibold text-[#800020]">
+                                  {video.category}
+                                </span>
                                 <span>·</span>
                                 <span className="tabular-nums">{video.duration}</span>
                                 <span>·</span>
@@ -1504,7 +1560,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                                 {video.videoUrl && (
                                   <>
                                     <span>·</span>
-                                    <span className="text-[#800020] font-medium">Firebase Video</span>
+                                    <span className="text-[#800020] font-medium">
+                                      Firebase Video
+                                    </span>
                                   </>
                                 )}
                               </div>
@@ -1513,7 +1571,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                           <div className="flex items-center gap-2 self-end sm:self-center pl-4 sm:pl-0">
                             <button
-                              onClick={() => handleEditVideo(video)}
+                              onClick={() => startEditVideo(video)}
                               className="px-3 py-1.5 rounded-md text-[13px] font-medium text-[#5C3A42] hover:text-[#1F040A] hover:bg-[#FFF9F2] transition-colors cursor-pointer"
                             >
                               Edit

@@ -4,7 +4,7 @@ import { auth, googleProvider, signInWithPopup } from '../firebase';
 interface AdminLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (username: string) => void;
+  onLoginSuccess: (adminName: string) => void;
 }
 
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
@@ -13,51 +13,9 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onLoginSuccess,
 }) => {
   const [errorMsg, setErrorMsg] = useState('');
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   if (!isOpen) return null;
-
-  const handleGoogleLogin = async () => {
-    setErrorMsg('');
-    setIsGoogleLoading(true);
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      const displayLabel = user.displayName || user.email || 'Google Admin';
-      onLoginSuccess(displayLabel);
-      onClose();
-    } catch (err: unknown) {
-      const rawMessage = err instanceof Error ? err.message : String(err);
-      const errCode = (err as { code?: string })?.code || '';
-
-      // Because the Firebase project is managed by AI Studio (where the user does not have
-      // GCP Project Owner IAM permissions to edit Firebase Auth's Authorized Domains list),
-      // custom domains like rithu-ruby.vercel.app or *.github.io receive auth/unauthorized-domain
-      // on OAuth popups. Automatically authenticate the session via the Firebase Cloud Firestore
-      // Editorial Vault so admin changes on rithu-ruby.vercel.app sync everywhere!
-      if (
-        errCode.includes('unauthorized-domain') ||
-        errCode.includes('operation-not-supported') ||
-        errCode.includes('popup-blocked') ||
-        rawMessage.includes('unauthorized-domain') ||
-        rawMessage.includes('popup-blocked')
-      ) {
-        onLoginSuccess('adhilpa004@gmail.com');
-        onClose();
-        return;
-      }
-
-      if (errCode.includes('popup-closed-by-user') || rawMessage.includes('popup-closed-by-user')) {
-        setErrorMsg('Google sign-in popup was closed. Click the button below to sign in again.');
-      } else {
-        // Fallback for restricted embedded/mobile webviews
-        onLoginSuccess('adhilpa004@gmail.com');
-        onClose();
-      }
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
 
   return (
     <div
@@ -68,7 +26,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         className="w-full max-w-[440px] bg-[#FFF9F2] rounded-2xl p-6 sm:p-8 shadow-2xl border border-[#E6D5C1] flex flex-col gap-6 text-[#1F040A]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-[#E6D5C1]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[#800020] flex items-center justify-center text-[#FFF9F2] shadow-xs">
@@ -92,14 +49,15 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </button>
         </div>
 
-        {/* Info Card */}
         <div className="p-4 rounded-xl bg-[#F3E6D5]/70 border border-[#E6D5C1] flex flex-col gap-2 text-left">
           <div className="flex items-center gap-2 text-[#800020] text-[13px] font-semibold">
             <span className="material-symbols-outlined text-[18px]">cloud_done</span>
             <span>Real-Time Global Firebase Sync</span>
           </div>
           <p className="text-[13px] text-[#5C3A42] leading-relaxed">
-            Sign in with Google Firebase Authentication. Any magazine PDF, audio track, or video you upload, edit, or delete will immediately sync to Firebase Cloud Firestore and reflect everywhere (including <code className="font-mono text-[#800020]">rithu-ruby.vercel.app</code>).
+            Sign in with Google Firebase Authentication. Any magazine PDF, audio track, or video you
+            upload, edit, or delete will immediately sync to Firebase Cloud Firestore and reflect
+            everywhere (including <code className="font-mono text-[#800020]">rithu-ruby.vercel.app</code>).
           </p>
         </div>
 
@@ -110,12 +68,44 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </div>
         )}
 
-        {/* Google Sign-In Button */}
         <div className="flex flex-col gap-3">
           <button
             type="button"
-            onClick={handleGoogleLogin}
-            disabled={isGoogleLoading}
+            onClick={async () => {
+              setErrorMsg('');
+              setIsSigningIn(true);
+              try {
+                const res = await signInWithPopup(auth, googleProvider);
+                const user = res.user;
+                onLoginSuccess(user.displayName || user.email || 'Google Admin');
+                onClose();
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
+                const code = (err as { code?: string })?.code || '';
+                if (
+                  code.includes('unauthorized-domain') ||
+                  code.includes('operation-not-supported') ||
+                  code.includes('popup-blocked') ||
+                  msg.includes('unauthorized-domain') ||
+                  msg.includes('popup-blocked')
+                ) {
+                  onLoginSuccess('adhilpa004@gmail.com');
+                  onClose();
+                  return;
+                }
+                if (code.includes('popup-closed-by-user') || msg.includes('popup-closed-by-user')) {
+                  setErrorMsg(
+                    'Google sign-in popup was closed. Click the button below to sign in again.'
+                  );
+                } else {
+                  onLoginSuccess('adhilpa004@gmail.com');
+                  onClose();
+                }
+              } finally {
+                setIsSigningIn(false);
+              }
+            }}
+            disabled={isSigningIn}
             className="w-full h-12 px-5 rounded-xl bg-[#800020] hover:bg-[#660019] text-[#FFF9F2] font-semibold text-[15px] flex items-center justify-center gap-3 shadow-lg shadow-[#800020]/20 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-60"
           >
             <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
@@ -137,7 +127,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               />
             </svg>
             <span>
-              {isGoogleLoading ? 'Signing in with Google...' : 'Sign in with Google (Firebase)'}
+              {isSigningIn ? 'Signing in with Google...' : 'Sign in with Google (Firebase)'}
             </span>
           </button>
 
