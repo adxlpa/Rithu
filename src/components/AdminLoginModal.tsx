@@ -89,7 +89,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                   msg.includes('unauthorized-domain') ||
                   msg.includes('popup-blocked')
                 ) {
-                  onLoginSuccess('adhilpa004@gmail.com');
+                  onLoginSuccess('adhilpa.cs@gmail.com');
                   onClose();
                   return;
                 }
@@ -98,7 +98,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                     'Google sign-in popup was closed. Click the button below to sign in again.'
                   );
                 } else {
-                  onLoginSuccess('adhilpa004@gmail.com');
+                  onLoginSuccess('adhilpa.cs@gmail.com');
                   onClose();
                 }
               } finally {

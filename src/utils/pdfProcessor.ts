@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { MagazinePage } from '../types';
 import { DEFAULT_MAGAZINE_PAGES } from '../data/initialData';
+import defaultRithuPdfUrl from '../assets/rithumag.pdf?url';
 
 try {
   if (typeof window !== 'undefined') {
@@ -31,6 +32,9 @@ const bundledPdfs = import.meta.glob(['/src/**/*.pdf', '/*.pdf'], {
 }) as Record<string, string>;
 
 export async function findBundledDefaultPdfUrl(): Promise<string | null> {
+  if (defaultRithuPdfUrl && typeof defaultRithuPdfUrl === 'string') {
+    return defaultRithuPdfUrl;
+  }
   const urls = Object.values(bundledPdfs);
   if (urls.length > 0 && typeof urls[0] === 'string') {
     return urls[0];
@@ -130,7 +134,10 @@ export async function renderPdfFileToMagazinePages(
       });
     }
 
-    if (onPartialPages && (pageNum === 4 || pageNum % 12 === 0 || pageNum === totalPages)) {
+    if (
+      onPartialPages &&
+      (pageNum === 1 || pageNum === 3 || pageNum % 8 === 0 || pageNum === totalPages)
+    ) {
       onPartialPages([...pages], totalPages);
     }
   }

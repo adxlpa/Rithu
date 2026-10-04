@@ -181,10 +181,9 @@ export async function loadPersistedMagazine(): Promise<{
     Array.isArray(pages) &&
     pages.length > 0 &&
     edition !== null &&
-    ((edition.sourceType === 'pdf' &&
-      Boolean(pages[0]?.pdfImageUrl) &&
-      !pages[0]?.pdfImageUrl?.startsWith('pdf-pages/')) ||
-      (edition.sourceType !== 'pdf' && pages.length >= DEFAULT_MAGAZINE_PAGES.length))
+    edition.sourceType === 'pdf' &&
+    Boolean(pages[0]?.pdfImageUrl) &&
+    !pages[0]?.pdfImageUrl?.startsWith('pdf-pages/')
   ) {
     return { pages, edition };
   }
@@ -198,7 +197,7 @@ export async function savePersistedMagazine(
   pages: MagazinePage[],
   edition: MagazineEditionInfo
 ): Promise<void> {
-  if (pages[0]?.pdfImageUrl?.startsWith('pdf-pages/')) return;
+  if (edition.sourceType !== 'pdf' || pages[0]?.pdfImageUrl?.startsWith('pdf-pages/')) return;
   await setItem(STORE_MAGAZINE, 'pages_v2_74', pages);
   await setItem(STORE_MAGAZINE, 'edition_v2_74', edition);
 }
