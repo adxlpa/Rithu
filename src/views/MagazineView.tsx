@@ -293,10 +293,10 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
         : '';
 
       // 1. Uploaded PDF / Full-Page Image Override
-      if (p.pdfImageUrl) {
+      if (p.pdfImageUrl && !p.pdfImageUrl.startsWith('pdf-pages/')) {
         d.innerHTML = `
           <div class="relative w-full h-full bg-[#FFF9F2] flex items-center justify-center overflow-hidden select-none">
-            <img src="${p.pdfImageUrl}" alt="${escapeHtml(p.title || `Page ${p.pageNumber}`)}" class="w-full h-full object-cover pointer-events-none" loading="lazy" />
+            <img src="${p.pdfImageUrl}" alt="${escapeHtml(p.title || `Page ${p.pageNumber}`)}" class="w-full h-full object-cover pointer-events-none" loading="lazy" onerror="this.onerror=null;this.src='${rithuCoverImg}';" />
             ${backFlapOverlay}
           </div>
         `;

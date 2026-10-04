@@ -188,7 +188,7 @@ export const INITIAL_MAGAZINE_EDITION: MagazineEditionInfo = {
   "year": "2026",
   "institution": "College of Engineering Munnar",
   "totalPages": 74,
-  "sourceType": "pdf",
+  "sourceType": "curated",
   "fileName": "rithumag.pdf",
   "updatedAt": "Official PDF Edition"
 };
@@ -198,11 +198,26 @@ export const DEFAULT_MAGAZINE_PAGES: MagazinePage[] = Array.from({ length: 74 },
   const isCover = pageNum === 1;
   const isBack = pageNum === 74;
   return {
-    id: `pdf-page-${pageNum}`,
-    pageNumber: idx,
+    id: `page-${pageNum}`,
+    pageNumber: pageNum,
     type: isCover ? "cover" : isBack ? "back-cover" : "content",
-    title: isCover ? "Cover" : isBack ? "Back Cover" : `Page ${pageNum}`,
-    subtitle: `PDF Page ${pageNum} of 74`,
-    pdfImageUrl: `pdf-pages/page-${pageNum}.jpg`,
+    title: isCover ? "ഋതു" : isBack ? "College of Engineering Munnar" : `Rithu · Page ${pageNum}`,
+    subtitle: `Page ${pageNum} of 74`,
+    templateData: isCover
+      ? {
+          side: "cover",
+          layoutVariant: "cover-2025",
+          title: "ഋതു",
+          pullQuote: "\"അക്ഷരങ്ങൾ പൂക്കുന്ന കലാലയത്തിന്റെ കാവ്യഋതു\"",
+          image: rithuCoverImg,
+          footerPrimary: "COLLEGE MAGAZINE 2025",
+          footerSecondary: "COLLEGE OF ENGINEERING MUNNAR",
+        }
+      : {
+          side: pageNum % 2 === 0 ? "left" : "right",
+          layoutVariant: "full-photo",
+          title: `RITHU · PAGE ${pageNum}`,
+          image: pageNum % 2 === 0 ? titleHeroImg : cemCampusSunriseImg,
+        },
   };
 });

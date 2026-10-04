@@ -9,8 +9,6 @@ import {
 import {
   renderPdfFileToMagazinePages,
   generateSamplePdfMagazinePages,
-  syncRenderedPagesToPublicServer,
-  deletePermanentDefaultPdf,
   PdfRenderProgress,
 } from '../utils/pdfProcessor';
 import { uploadMediaToFirestore } from '../utils/storage';
@@ -194,9 +192,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
           updatedAt: 'Synced via Firebase',
         };
         setCloudSyncPercent(0);
-        await syncRenderedPagesToPublicServer(renderedPages, newEdition, (pct) =>
-          setCloudSyncPercent(pct)
-        );
         await onUpdateMagazinePages(renderedPages, newEdition, (pct) => setCloudSyncPercent(pct));
         setIsProcessingPdf(false);
         setPdfProgress(null);
@@ -240,7 +235,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleResetToCurated = async () => {
-    await deletePermanentDefaultPdf();
     await onResetMagazinePages();
     showToast('Restored permanent 74-page Rithu Magazine issue.');
   };
