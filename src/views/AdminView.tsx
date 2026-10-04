@@ -952,6 +952,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                           >
                             <option value="Malayalam">Malayalam</option>
                             <option value="English">English</option>
+                            <option value="English">Hindi</option>
                             <option value="Bilingual">Bilingual</option>
                           </select>
                           <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#5C3A42] text-base">
