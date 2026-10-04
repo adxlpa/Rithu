@@ -38,53 +38,6 @@ export const AudioView: React.FC<AudioViewProps> = ({
             Some stories are meant to be read. Others are meant to be heard. Listen to the voices
             behind the pages of Rithu.
           </p>
-
-          <nav aria-label="Audio filter" className="flex items-center gap-2.5 mt-8 pt-2 text-[14px]">
-            <button
-              type="button"
-              onClick={() => setFilter('all')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
-                filter === 'all'
-                  ? 'bg-[#800020] text-[#FFF9F2] font-semibold shadow-sm'
-                  : 'bg-[#F3E6D5] text-[#5C3A42] hover:text-[#1F040A] font-medium border border-[#E6D5C1]'
-              }`}
-            >
-              <span>All</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter('malayalam')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
-                filter === 'malayalam'
-                  ? 'bg-[#800020] text-[#FFF9F2] font-semibold shadow-sm'
-                  : 'bg-[#F3E6D5] text-[#5C3A42] hover:text-[#1F040A] font-medium border border-[#E6D5C1]'
-              }`}
-            >
-              <span>Malayalam</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter('english')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
-                filter === 'english'
-                  ? 'bg-[#800020] text-[#FFF9F2] font-semibold shadow-sm'
-                  : 'bg-[#F3E6D5] text-[#5C3A42] hover:text-[#1F040A] font-medium border border-[#E6D5C1]'
-              }`}
-            >
-              <span>English</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter('hindi')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
-                filter === 'hindi'
-                  ? 'bg-[#800020] text-[#FFF9F2] font-semibold shadow-sm'
-                  : 'bg-[#F3E6D5] text-[#5C3A42] hover:text-[#1F040A] font-medium border border-[#E6D5C1]'
-              }`}
-            >
-              <span>Hindi</span>
-            </button>
-          </nav>
         </header>
 
         <div
@@ -146,14 +99,11 @@ export const AudioView: React.FC<AudioViewProps> = ({
                     </h2>
                     <div className="flex items-center gap-2 text-[13px] text-[#5C3A42] mt-0.5 flex-wrap">
                       <span>{track.author}</span>
-                      <span className="text-[#800020]">·</span>
-                      <span className="text-[#800020]">·</span>
-                      <span className="tabular-nums">{track.duration}</span>
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 self-start sm:self-center flex-shrink-0">
-                  <span className="text-[12px] font-medium text-[#800020]">{track.language}</span>
+                  <span className="text-[12px] font-medium text-[#800020]">{track.duration}</span>
                 </div>
               </article>
             );
