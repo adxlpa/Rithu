@@ -41,6 +41,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         <nav className="hidden md:flex items-center gap-7" aria-label="Main Navigation">
           <button
             onClick={() => onNavigate('magazine')}
+            onMouseEnter={() => {
+              const img = new Image();
+              img.src = '/magazine/page-1.webp';
+            }}
+            onTouchStart={() => {
+              const img = new Image();
+              img.src = '/magazine/page-1.webp';
+            }}
             className={`text-[14.5px] pb-1 transition-all duration-150 cursor-pointer whitespace-nowrap ${
               currentView === 'magazine'
                 ? 'text-[#800020] font-semibold border-b-2 border-[#800020]'

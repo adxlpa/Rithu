@@ -1607,6 +1607,25 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
     fitBook();
   }, [pages, fitBook]);
 
+  // Background prefetch the next 2-4 pages into memory so page turns feel instantaneous
+  useEffect(() => {
+    const nextPages = isSinglePageMode
+      ? [currentSpreadIndex + 2, currentSpreadIndex + 3]
+      : [
+          2 * currentSpreadIndex + 1,
+          2 * currentSpreadIndex + 2,
+          2 * currentSpreadIndex + 3,
+          2 * currentSpreadIndex + 4,
+        ];
+
+    nextPages.forEach((pNum) => {
+      if (pNum >= 1 && pNum <= pages.length) {
+        const prefetchImg = new Image();
+        prefetchImg.src = `/magazine/page-${pNum}.webp`;
+      }
+    });
+  }, [currentSpreadIndex, isSinglePageMode, pages.length]);
+
   useEffect(() => {
     const handleResize = () => fitBook();
     window.addEventListener('resize', handleResize);
@@ -1811,60 +1830,63 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          {pages.map((p, idx) => {
-            const targetIndex = isSinglePageMode ? idx : Math.floor((idx + 1) / 2);
-            const isSelected = isSinglePageMode
-              ? currentSpreadIndex === idx
-              : currentSpreadIndex === targetIndex;
-            const thumbImg = p.pdfImageUrl || p.templateData?.image;
-            return (
-              <div
-                key={p.id || idx}
-                onClick={() => {
-                  jumpSpread(targetIndex);
-                  setIsThumbDrawerOpen(false);
-                }}
-                className={`flex flex-col items-center p-1 rounded-md cursor-pointer transition-all ${
-                  isSelected
-                    ? 'ring-2 ring-[#800020] bg-[#F3E6D5]'
-                    : 'hover:bg-[#F3E6D5]/60'
-                }`}
-              >
+        {isThumbDrawerOpen && (
+          <div className="grid grid-cols-2 gap-2">
+            {pages.map((p, idx) => {
+              const targetIndex = isSinglePageMode ? idx : Math.floor((idx + 1) / 2);
+              const isSelected = isSinglePageMode
+                ? currentSpreadIndex === idx
+                : currentSpreadIndex === targetIndex;
+              const thumbImg = p.pdfImageUrl || p.templateData?.image;
+              return (
                 <div
-                  className="w-full aspect-[1/1.41] rounded border border-[#E6D5C1] overflow-hidden flex flex-col items-center justify-center shadow-xs relative p-1 text-center"
-                  style={{
-                    backgroundColor: p.templateData?.bgColor || '#FFF9F2',
+                  key={p.id || idx}
+                  onClick={() => {
+                    jumpSpread(targetIndex);
+                    setIsThumbDrawerOpen(false);
                   }}
+                  className={`flex flex-col items-center p-1 rounded-md cursor-pointer transition-all ${
+                    isSelected
+                      ? 'ring-2 ring-[#800020] bg-[#F3E6D5]'
+                      : 'hover:bg-[#F3E6D5]/60'
+                  }`}
                 >
-                  {thumbImg ? (
-                    <img
-                      src={thumbImg}
-                      alt={`P${idx + 1}`}
-                      className="w-full h-full object-cover rounded-2xs"
-                    />
-                  ) : (
-                    <>
-                      <span className="text-[9px] text-[#800020] font-bold font-mono">
-                        {idx + 1}
-                      </span>
-                      <span className="text-[8px] text-[#1F040A] font-serif line-clamp-2 mt-0.5 leading-tight">
-                        {p.title || `Page ${idx + 1}`}
-                      </span>
-                    </>
-                  )}
+                  <div
+                    className="w-full aspect-[1/1.41] rounded border border-[#E6D5C1] overflow-hidden flex flex-col items-center justify-center shadow-xs relative p-1 text-center"
+                    style={{
+                      backgroundColor: p.templateData?.bgColor || '#FFF9F2',
+                    }}
+                  >
+                    {thumbImg ? (
+                      <img
+                        src={thumbImg}
+                        alt={`P${idx + 1}`}
+                        className="w-full h-full object-cover rounded-2xs"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <>
+                        <span className="text-[9px] text-[#800020] font-bold font-mono">
+                          {idx + 1}
+                        </span>
+                        <span className="text-[8px] text-[#1F040A] font-serif line-clamp-2 mt-0.5 leading-tight">
+                          {p.title || `Page ${idx + 1}`}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-medium text-[#1F040A] mt-1 truncate max-w-full">
+                    {idx === 0
+                      ? 'Cover'
+                      : idx === pages.length - 1
+                      ? 'Back Cover'
+                      : `Page ${idx + 1}`}
+                  </span>
                 </div>
-                <span className="text-[10px] font-medium text-[#1F040A] mt-1 truncate max-w-full">
-                  {idx === 0
-                    ? 'Cover'
-                    : idx === pages.length - 1
-                    ? 'Back Cover'
-                    : `Page ${idx + 1}`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </aside>
 
       {/* Main Flipbook Stage */}
