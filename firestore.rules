@@ -38,16 +38,11 @@ service cloud.firestore {
     }
 
     function hasEditorialWriteAuth(data) {
-      return isAdmin() || (
-        data.editorialKey is string &&
-        data.editorialKey.size() >= 1 &&
-        data.editorialKey.size() <= 64 &&
-        data.editorialKey == 'rithu2026-cem-vault'
-      );
+      return isAdmin();
     }
 
     function hasEditorialDeleteAuth() {
-      return isAdmin() || existing().isPublic == true;
+      return isAdmin();
     }
 
     function isValidCreatorUidFormat(uid) {
@@ -55,9 +50,7 @@ service cloud.firestore {
     }
 
     function isValidCreatorIdentity(uid) {
-      return isValidCreatorUidFormat(uid) && (
-        (isSignedIn() && uid == request.auth.uid) || uid == 'rithu-editorial-admin'
-      );
+      return isValidCreatorUidFormat(uid) && isSignedIn() && isAdmin();
     }
 
     // =========================================================================

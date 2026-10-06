@@ -1,24 +1,13 @@
 import React, { useState } from 'react';
-import { auth, googleProvider, signInWithPopup } from '../firebase';
+import { auth, googleProvider, signInWithPopup, signOut } from '../firebase';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLoginSuccess: (adminName: string) => void;
 }
+
 const ALLOWED_ADMINS = ['adhilpa.cs@gmail.com'];
-
-const res = await signInWithPopup(auth, googleProvider);
-const user = res.user;
-
-if (!user.email || !ALLOWED_ADMINS.includes(user.email)) {
-  await signOut(auth);
-  setErrorMsg(`Access Denied: ${user.email} is not an authorized administrator.`);
-  return;
-}
-
-onLoginSuccess(user.displayName || user.email);
-onClose();
 
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   isOpen,
@@ -90,29 +79,31 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               try {
                 const res = await signInWithPopup(auth, googleProvider);
                 const user = res.user;
+
+                if (!user.email || !ALLOWED_ADMINS.includes(user.email.toLowerCase())) {
+                  await signOut(auth);
+                  setErrorMsg(`Access Denied: ${user.email || 'This account'} is not an authorized administrator.`);
+                  return;
+                }
+
                 onLoginSuccess(user.displayName || user.email || 'Google Admin');
                 onClose();
               } catch (err: unknown) {
                 const msg = err instanceof Error ? err.message : String(err);
                 const code = (err as { code?: string })?.code || '';
-                if (
-                  code.includes('unauthorized-domain') ||
-                  code.includes('operation-not-supported') ||
-                  code.includes('popup-blocked') ||
-                  msg.includes('unauthorized-domain') ||
-                  msg.includes('popup-blocked')
-                ) {
-                  onLoginSuccess('adhilpa.cs@gmail.com');
-                  onClose();
-                  return;
-                }
                 if (code.includes('popup-closed-by-user') || msg.includes('popup-closed-by-user')) {
                   setErrorMsg(
                     'Google sign-in popup was closed. Click the button below to sign in again.'
                   );
+                } else if (
+                  code.includes('unauthorized-domain') ||
+                  msg.includes('unauthorized-domain')
+                ) {
+                  setErrorMsg(
+                    'This domain is not authorized in Firebase Console. Please add it to Authentication -> Settings -> Authorized Domains.'
+                  );
                 } else {
-                  onLoginSuccess('adhilpa.cs@gmail.com');
-                  onClose();
+                  setErrorMsg(msg || 'Authentication failed.');
                 }
               } finally {
                 setIsSigningIn(false);
