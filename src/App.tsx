@@ -182,55 +182,7 @@ export function App() {
           if (edImg) setEditorialBoardImage(edImg);
           setIsHydrated(true);
 
-          if (mag.edition.sourceType !== 'pdf') {
-            const bundledPdfUrl = await findBundledDefaultPdfUrl();
-            if (bundledPdfUrl && active) {
-              setIsUploadingPdf(true);
-              try {
-                const rendered = await renderPdfFileToMagazinePages(
-                  bundledPdfUrl,
-                  (prog) => {
-                    if (active) setPdfUploadProgress(prog);
-                  },
-                  (partial, total) => {
-                    if (active) {
-                      setMagazinePages(partial);
-                      setMagazineEdition({
-                        title: 'Rithu — College Magazine',
-                        year: '2026',
-                        institution: 'College of Engineering Munnar',
-                        totalPages: total,
-                        sourceType: 'pdf',
-                        fileName: 'rithumag.pdf',
-                        updatedAt: 'Default PDF Edition',
-                      });
-                    }
-                  }
-                );
-                if (active && rendered.length > 0) {
-                  const pdfEdition: MagazineEditionInfo = {
-                    title: 'Rithu — College Magazine',
-                    year: '2026',
-                    institution: 'College of Engineering Munnar',
-                    totalPages: rendered.length,
-                    sourceType: 'pdf',
-                    fileName: 'rithumag.pdf',
-                    updatedAt: 'Default PDF Edition',
-                  };
-                  setMagazinePages(rendered);
-                  setMagazineEdition(pdfEdition);
-                  await savePersistedMagazine(rendered, pdfEdition);
-                }
-              } catch (e) {
-                console.warn('Could not load bundled default PDF:', e);
-              } finally {
-                if (active) {
-                  setIsUploadingPdf(false);
-                  setPdfUploadProgress(null);
-                }
-              }
-            }
-          }
+          
         }
       } catch (err) {
         console.error('Storage initialization failed:', err);
