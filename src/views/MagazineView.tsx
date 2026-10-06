@@ -94,6 +94,23 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
     sR: null,
   });
 
+  // Mobile pinch-to-zoom and two-finger pan gesture state
+  const touchStateRef = useRef<{
+    isPinching: boolean;
+    initialDist: number;
+    initialZoom: number;
+    panStart: { x: number; y: number };
+    currentPan: { x: number; y: number };
+    lastTapTime: number;
+  }>({
+    isPinching: false,
+    initialDist: 1,
+    initialZoom: 1,
+    panStart: { x: 0, y: 0 },
+    currentPan: { x: 0, y: 0 },
+    lastTapTime: 0,
+  });
+
   // UI state for React header/footer rendering
   const [currentSpreadIndex, setCurrentSpreadIndex] = useState(0);
   const [totalSpreads, setTotalSpreads] = useState(0);
@@ -1076,7 +1093,8 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
     const eng = engineRef.current;
     if (!bookRef.current) return;
     const x = eng.single ? -25 : t === 0 ? -25 : t === eng.N ? 25 : 0;
-    bookRef.current.style.transform = `translateX(${x}%) scale(${eng.zoom})`;
+    const pan = touchStateRef.current.currentPan;
+    bookRef.current.style.transform = `translateX(${x}%) translate3d(${pan.x}px, ${pan.y}px, 0) scale(${eng.zoom})`;
   }, []);
 
   // Refresh static page layers
@@ -1533,7 +1551,7 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
   const handleBookPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const eng = engineRef.current;
-      if (eng.busy) return;
+      if (eng.busy || eng.zoom > 1.05) return;
       const [x, y] = getPointerBookCoord(e);
 
       if (!eng.single) {
@@ -1632,6 +1650,125 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, [fitBook]);
 
+  // Mobile two-finger pinch-to-zoom, pan, and double-tap zoom gestures
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const eng = engineRef.current;
+      const ts = touchStateRef.current;
+
+      if (e.touches.length === 2) {
+        ts.isPinching = true;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        ts.initialDist = Math.hypot(dx, dy) || 1;
+        ts.initialZoom = eng.zoom;
+
+        if (eng.drag) eng.drag = null;
+        if (eng.T) endCurl();
+        e.preventDefault();
+        return;
+      }
+
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const now = Date.now();
+
+        // Double-tap to toggle zoom (1x <-> 2x)
+        if (now - ts.lastTapTime < 280) {
+          ts.lastTapTime = 0;
+          if (eng.zoom > 1.1) {
+            eng.zoom = 1;
+            setCurrentZoom(1);
+            ts.currentPan = { x: 0, y: 0 };
+          } else {
+            eng.zoom = 2;
+            setCurrentZoom(2);
+          }
+          shiftBook(eng.s);
+          e.preventDefault();
+          return;
+        }
+        ts.lastTapTime = now;
+
+        if (eng.zoom > 1.05) {
+          ts.panStart = {
+            x: touch.clientX - ts.currentPan.x,
+            y: touch.clientY - ts.currentPan.y,
+          };
+        }
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const eng = engineRef.current;
+      const ts = touchStateRef.current;
+
+      if (ts.isPinching && e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy) || 1;
+        const factor = dist / ts.initialDist;
+        const newZoom = Math.min(3.2, Math.max(1.0, ts.initialZoom * factor));
+
+        eng.zoom = newZoom;
+        setCurrentZoom(Math.round(newZoom * 10) / 10);
+
+        if (newZoom <= 1.05) {
+          ts.currentPan = { x: 0, y: 0 };
+        }
+        shiftBook(eng.s);
+        e.preventDefault();
+        return;
+      }
+
+      if (!ts.isPinching && e.touches.length === 1 && eng.zoom > 1.05) {
+        const touch = e.touches[0];
+        const rawX = touch.clientX - ts.panStart.x;
+        const rawY = touch.clientY - ts.panStart.y;
+
+        const maxPanX = (eng.W * (eng.zoom - 1)) / 1.6;
+        const maxPanY = (eng.H * (eng.zoom - 1)) / 1.6;
+        ts.currentPan = {
+          x: Math.max(-maxPanX, Math.min(maxPanX, rawX)),
+          y: Math.max(-maxPanY, Math.min(maxPanY, rawY)),
+        };
+
+        shiftBook(eng.s);
+        e.preventDefault();
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      const ts = touchStateRef.current;
+      const eng = engineRef.current;
+
+      if (e.touches.length < 2) {
+        ts.isPinching = false;
+        if (eng.zoom < 1.05) {
+          eng.zoom = 1;
+          setCurrentZoom(1);
+          ts.currentPan = { x: 0, y: 0 };
+          shiftBook(eng.s);
+        }
+      }
+    };
+
+    stage.addEventListener('touchstart', onTouchStart, { passive: false });
+    stage.addEventListener('touchmove', onTouchMove, { passive: false });
+    stage.addEventListener('touchend', onTouchEnd, { passive: false });
+    stage.addEventListener('touchcancel', onTouchEnd, { passive: false });
+
+    return () => {
+      stage.removeEventListener('touchstart', onTouchStart);
+      stage.removeEventListener('touchmove', onTouchMove);
+      stage.removeEventListener('touchend', onTouchEnd);
+      stage.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [shiftBook, endCurl]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const eng = engineRef.current;
@@ -1662,9 +1799,12 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
   };
 
   const toggleZoom = () => {
-    const nextZoom = currentZoom >= 1.8 ? 1 : currentZoom >= 1.4 ? 1.8 : 1.4;
+    const nextZoom = currentZoom >= 2.0 ? 1 : currentZoom >= 1.4 ? 2.0 : 1.4;
     setCurrentZoom(nextZoom);
     engineRef.current.zoom = nextZoom;
+    if (nextZoom === 1) {
+      touchStateRef.current.currentPan = { x: 0, y: 0 };
+    }
     shiftBook(engineRef.current.s);
   };
 
@@ -1902,7 +2042,7 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
             onUploadDirectPdf(file);
           }
         }}
-        className="relative w-full flex-1 flex items-center justify-center overflow-hidden book-perspective"
+        className="relative w-full flex-1 flex items-center justify-center overflow-hidden book-perspective touch-none select-none"
       >
         {/* Progress Pill */}
         {isUploadingPdf && (
