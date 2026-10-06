@@ -187,23 +187,24 @@ export const INITIAL_MAGAZINE_EDITION: MagazineEditionInfo = {
   title: "Rithu — College Magazine 2025–26",
   year: "2026",
   institution: "College of Engineering Munnar",
-  totalPages: 74,
+  totalPages: 76, // <-- 76
   sourceType: "pdf",
   fileName: "rithumag.pdf",
   updatedAt: "Official Edition",
 };
 
-export const DEFAULT_MAGAZINE_PAGES: MagazinePage[] = Array.from({ length: 74 }, (_, idx) => {
+export const DEFAULT_MAGAZINE_PAGES: MagazinePage[] = Array.from({ length: 76 }, (_, idx) => {
   const pageNum = idx + 1;
   const isCover = pageNum === 1;
-  const isBack = pageNum === 74;
+  const isBack = pageNum === 76; // <-- 76 (last page is back cover)
   return {
     id: `page-${pageNum}`,
     pageNumber: pageNum - 1,
     type: isCover ? "cover" : isBack ? "back-cover" : "content",
     title: isCover ? "Cover" : isBack ? "Back Cover" : `Page ${pageNum}`,
-    subtitle: `Page ${pageNum} of 74`,
+    subtitle: `Page ${pageNum} of 76`, // <-- 76
     pdfImageUrl: `/magazine/page-${pageNum}.webp`,
   };
 });
+
 
