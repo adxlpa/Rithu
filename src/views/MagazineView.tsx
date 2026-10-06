@@ -296,7 +296,7 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
       if (p.pdfImageUrl && !p.pdfImageUrl.startsWith('pdf-pages/')) {
         d.innerHTML = `
           <div class="relative w-full h-full bg-[#FFF9F2] flex items-center justify-center overflow-hidden select-none">
-            <img src="${p.pdfImageUrl}" alt="${escapeHtml(p.title || `Page ${p.pageNumber}`)}" class="w-full h-full object-cover pointer-events-none" loading="lazy" onerror="this.onerror=null;this.src='${rithuCoverImg}';" />
+            <img src="${p.pdfImageUrl}" alt="${escapeHtml(p.title || `Page ${p.pageNumber}`)}" class="w-full h-full object-cover pointer-events-none block" onerror="this.onerror=null;this.src='${rithuCoverImg}';" />
             ${backFlapOverlay}
           </div>
         `;
