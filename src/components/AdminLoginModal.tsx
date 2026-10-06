@@ -6,6 +6,19 @@ interface AdminLoginModalProps {
   onClose: () => void;
   onLoginSuccess: (adminName: string) => void;
 }
+const ALLOWED_ADMINS = ['adhilpa.cs@gmail.com'];
+
+const res = await signInWithPopup(auth, googleProvider);
+const user = res.user;
+
+if (!user.email || !ALLOWED_ADMINS.includes(user.email)) {
+  await signOut(auth);
+  setErrorMsg(`Access Denied: ${user.email} is not an authorized administrator.`);
+  return;
+}
+
+onLoginSuccess(user.displayName || user.email);
+onClose();
 
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   isOpen,
