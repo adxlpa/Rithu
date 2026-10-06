@@ -174,8 +174,8 @@ export async function loadPersistedMagazine(): Promise<{
   pages: MagazinePage[];
   edition: MagazineEditionInfo;
 }> {
-  const pages = await getItem<MagazinePage[]>(STORE_MAGAZINE, 'pages_v2_74');
-  const edition = await getItem<MagazineEditionInfo>(STORE_MAGAZINE, 'edition_v2_74');
+  const pages = await getItem<MagazinePage[]>(STORE_MAGAZINE, 'pages_v3_76');
+  const edition = await getItem<MagazineEditionInfo>(STORE_MAGAZINE, 'edition_v3_76');
   if (
     pages !== null &&
     Array.isArray(pages) &&
@@ -198,13 +198,13 @@ export async function savePersistedMagazine(
   edition: MagazineEditionInfo
 ): Promise<void> {
   if (edition.sourceType !== 'pdf' || pages[0]?.pdfImageUrl?.startsWith('pdf-pages/')) return;
-  await setItem(STORE_MAGAZINE, 'pages_v2_74', pages);
-  await setItem(STORE_MAGAZINE, 'edition_v2_74', edition);
+  await setItem(STORE_MAGAZINE, 'pages_v3_76', pages);
+  await setItem(STORE_MAGAZINE, 'edition_v3_76', edition);
 }
 
 export async function resetPersistedMagazine(): Promise<void> {
-  await setItem(STORE_MAGAZINE, 'pages_v2_74', DEFAULT_MAGAZINE_PAGES);
-  await setItem(STORE_MAGAZINE, 'edition_v2_74', INITIAL_MAGAZINE_EDITION);
+  await setItem(STORE_MAGAZINE, 'pages_v3_76', DEFAULT_MAGAZINE_PAGES);
+  await setItem(STORE_MAGAZINE, 'edition_v3_76', INITIAL_MAGAZINE_EDITION);
 }
 
 export async function loadPersistedEditorialBoardImage(): Promise<string | null> {
