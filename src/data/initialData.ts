@@ -184,13 +184,13 @@ export const INITIAL_VIDEO_ITEMS: VideoItem[] = [
 export const INITIAL_MAGAZINE_SPREADS: MagazineSpread[] = [];
 
 export const INITIAL_MAGAZINE_EDITION: MagazineEditionInfo = {
-  "title": "Rithu — College Magazine 2025–26",
-  "year": "2026",
-  "institution": "College of Engineering Munnar",
-  "totalPages": 74,
-  "sourceType": "curated",
-  "fileName": "rithumag.pdf",
-  "updatedAt": "Official PDF Edition"
+  title: "Rithu — College Magazine 2025–26",
+  year: "2026",
+  institution: "College of Engineering Munnar",
+  totalPages: 74,
+  sourceType: "pdf",
+  fileName: "rithumag.pdf",
+  updatedAt: "Official Edition",
 };
 
 export const DEFAULT_MAGAZINE_PAGES: MagazinePage[] = Array.from({ length: 74 }, (_, idx) => {
@@ -199,25 +199,11 @@ export const DEFAULT_MAGAZINE_PAGES: MagazinePage[] = Array.from({ length: 74 },
   const isBack = pageNum === 74;
   return {
     id: `page-${pageNum}`,
-    pageNumber: pageNum,
+    pageNumber: pageNum - 1,
     type: isCover ? "cover" : isBack ? "back-cover" : "content",
-    title: isCover ? "ഋതു" : isBack ? "College of Engineering Munnar" : `Rithu · Page ${pageNum}`,
+    title: isCover ? "Cover" : isBack ? "Back Cover" : `Page ${pageNum}`,
     subtitle: `Page ${pageNum} of 74`,
-    templateData: isCover
-      ? {
-          side: "cover",
-          layoutVariant: "cover-2025",
-          title: "ഋതു",
-          pullQuote: "\"അക്ഷരങ്ങൾ പൂക്കുന്ന കലാലയത്തിന്റെ കാവ്യഋതു\"",
-          image: rithuCoverImg,
-          footerPrimary: "COLLEGE MAGAZINE 2025",
-          footerSecondary: "COLLEGE OF ENGINEERING MUNNAR",
-        }
-      : {
-          side: pageNum % 2 === 0 ? "left" : "right",
-          layoutVariant: "full-photo",
-          title: `RITHU · PAGE ${pageNum}`,
-          image: pageNum % 2 === 0 ? titleHeroImg : cemCampusSunriseImg,
-        },
+    pdfImageUrl: `/magazine/page-${pageNum}.webp`,
   };
 });
+
