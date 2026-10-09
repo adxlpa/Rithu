@@ -6,7 +6,6 @@ interface MagazineViewProps {
   pages: MagazinePage[];
   editionInfo: MagazineEditionInfo;
   onNavigate: (view: ViewMode) => void;
-  onOpenAdminUpload?: () => void;
   onUploadDirectPdf?: (file: File) => Promise<void>;
   isUploadingPdf?: boolean;
   pdfUploadProgress?: { currentPage: number; totalPages: number; percent: number } | null;
@@ -25,7 +24,6 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
   pages,
   editionInfo,
   onNavigate,
-  onOpenAdminUpload,
   onUploadDirectPdf,
   isUploadingPdf = false,
   pdfUploadProgress = null,
@@ -1890,19 +1888,6 @@ export const MagazineView: React.FC<MagazineViewProps> = ({
             </label>
           )}
 
-          {onUploadDirectPdf && (
-            <button
-              onClick={() => {
-                if (onOpenAdminUpload) onOpenAdminUpload();
-                else onNavigate('admin-portal');
-              }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#F3E6D5] hover:bg-[#800020] text-[#800020] hover:text-[#FFF9F2] border border-[#800020]/30 text-[11px] sm:text-[12px] font-medium transition-colors cursor-pointer mr-1 shadow-xs"
-              title="Manage Magazine Pages & Photos in Admin"
-            >
-              <span className="material-symbols-outlined text-[16px]">photo_library</span>
-              <span className="hidden sm:inline">Manage Pages</span>
-            </button>
-          )}
 
           <button
             onClick={() => setIsThumbDrawerOpen(!isThumbDrawerOpen)}

@@ -111,4 +111,4 @@ export interface MagazineEditionInfo {
   updatedAt?: string;
 }
 
-export type ViewMode = 'home' | 'magazine' | 'video' | 'audio' | 'admin-portal';
+export type ViewMode = 'home' | 'magazine' | 'video' | 'audio';
